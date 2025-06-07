@@ -39,6 +39,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         if (error) throw error;
         setMessage('Check your email for the confirmation link!');
+        window.location.href = '/dashboard';
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
