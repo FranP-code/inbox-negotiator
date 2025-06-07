@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { supabase, type Debt } from "../lib/supabase";
+import { supabase, type Debt, type UserProfile } from "../lib/supabase";
 import { Button } from "@/components/ui/button";
 import { DebtCard } from "./DebtCard";
 import { DebtTimeline } from "./DebtTimeline";
+import { OnboardingDialog } from "./OnboardingDialog";
 import {
 	Card,
 	CardContent,
@@ -22,11 +23,14 @@ import {
 	RefreshCw,
 	BarChart3,
 	LogOut,
+	Settings,
 } from "lucide-react";
 
 export function Dashboard() {
 	const [debts, setDebts] = useState<Debt[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+	const [showOnboarding, setShowOnboarding] = useState(false);
 	const [stats, setStats] = useState({
 		totalDebts: 0,
 		totalAmount: 0,
@@ -35,6 +39,7 @@ export function Dashboard() {
 	});
 
 	useEffect(() => {
+		fetchUserProfile();
 		fetchDebts();
 		setupRealtimeSubscription();
 	}, []);
@@ -43,11 +48,41 @@ export function Dashboard() {
 		calculateStats();
 	}, [debts]);
 
+	const fetchUserProfile = async () => {
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
+			const { data: profile } = await supabase
+				.from("user_profiles")
+				.select("*")
+				.eq("user_id", user.id)
+				.single();
+
+			setUserProfile(profile);
+
+			// Show onboarding if user hasn't completed it
+			if (profile && !profile.onboarding_completed) {
+				setShowOnboarding(true);
+			}
+		} catch (error) {
+			console.error("Error fetching user profile:", error);
+		}
+	};
+
 	const fetchDebts = async () => {
 		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
 			const { data, error } = await supabase
 				.from("debts")
 				.select("*")
+				.eq("user_id", user.id)
 				.order("created_at", { ascending: false });
 
 			if (error) throw error;
@@ -111,6 +146,12 @@ export function Dashboard() {
 		});
 	};
 
+	const handleOnboardingComplete = () => {
+		setShowOnboarding(false);
+		// Refresh user profile to reflect onboarding completion
+		fetchUserProfile();
+	};
+
 	const handleSignOut = async () => {
 		await supabase.auth.signOut();
 		window.location.href = "/";
@@ -152,13 +193,18 @@ export function Dashboard() {
 				<div className="mb-8 flex justify-between items-start">
 					<div>
 						<h1 className="text-3xl font-bold text-gray-900 dark:text-foreground flex items-center gap-3">
-							<BarChart3 className="h-8 w-8 text-primary" />
-							InboxNegotiator Dashboard
+							Dashboard
 						</h1>
 						<p className="text-gray-600 dark:text-gray-300 mt-2">
 							AI-powered debt resolution platform with real-time updates
 						</p>
 					</div>
+					<Button asChild>
+						<a href="/configuration" className="flex items-center gap-2">
+							<Settings className="h-4 w-4" />
+							Configuration
+						</a>
+					</Button>
 				</div>
 
 				{/* Stats Cards */}
@@ -290,6 +336,12 @@ export function Dashboard() {
 					<p className="mt-1">Real-time updates powered by Supabase</p>
 				</div>
 			</div>
+
+			{/* Onboarding Dialog */}
+			<OnboardingDialog
+				open={showOnboarding}
+				onComplete={handleOnboardingComplete}
+			/>
 		</div>
 	);
 }

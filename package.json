@@ -69,5 +69,13 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.0.0",
     "zod": "^3.23.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "supabase"
+    ]
+  },
+  "devDependencies": {
+    "supabase": "^2.24.3"
   }
 }

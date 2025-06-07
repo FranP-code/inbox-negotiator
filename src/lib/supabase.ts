@@ -9,6 +9,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type User = {
+  id: string;
+  email: string;
+  created_at: string;
+};
+
 export type Debt = {
   id: string;
   created_at: string;
@@ -19,6 +25,10 @@ export type Debt = {
   status: 'received' | 'negotiating' | 'settled' | 'failed' | 'opted_out';
   negotiated_plan: string | null;
   projected_savings: number;
+  user_id: string;
+  description?: string | null;
+  due_date?: string | null;
+  metadata?: Record<string, any> | null;
 };
 
 export type AuditLog = {
@@ -27,4 +37,33 @@ export type AuditLog = {
   debt_id: string;
   action: string;
   details: Record<string, any>;
+};
+
+export type UserProfile = {
+  id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  onboarding_completed: boolean;
+  first_login_at: string | null;
+  email_processing_limit: number;
+};
+
+export type AdditionalEmail = {
+  id: string;
+  user_id: string;
+  email_address: string;
+  verified: boolean;
+  verification_token: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailProcessingUsage = {
+  id: string;
+  user_id: string;
+  month_year: string;
+  emails_processed: number;
+  created_at: string;
+  updated_at: string;
 };

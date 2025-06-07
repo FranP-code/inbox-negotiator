@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Creates a Supabase client with service role key for server-side operations
@@ -48,4 +49,105 @@ export function handleDatabaseError(error: any) {
 		message: errorMessage,
 		originalError: process.env.NODE_ENV === "development" ? error : undefined,
 	};
+}
+
+/**
+ * Find user ID by email address (primary or additional email)
+ * First checks public.users table, then additional_emails if needed
+ */
+export async function getUserIdByEmail(
+	email: string,
+	supabaseAdmin?: SupabaseClient
+): Promise<string | null> {
+	const client = supabaseAdmin || createSupabaseAdmin();
+
+	try {
+		// First try to find user by primary email in public.users table
+		const { data: primaryUser, error: primaryError } = await client
+			.from("users")
+			.select("id")
+			.eq("email", email.toLowerCase())
+			.maybeSingle();
+
+		if (primaryError) {
+			console.error("Error finding user by primary email:", primaryError);
+		}
+
+		if (primaryUser) {
+			return primaryUser.id;
+		}
+
+		// If not found, check additional emails
+		const { data: additionalEmail, error: additionalError } = await client
+			.from("additional_emails")
+			.select("user_id")
+			.eq("email_address", email.toLowerCase())
+			// TODO: START REQUIRING VERIFIED ADDITIONAL EMAILS
+			// .eq("verified", true)
+			.eq("verified", false)
+			.maybeSingle();
+
+		if (additionalError) {
+			console.error("Error finding user by additional email:", additionalError);
+			return null;
+		}
+
+		return additionalEmail?.user_id || null;
+	} catch (error) {
+		console.error("Error in getUserIdByEmail:", error);
+		return null;
+	}
+}
+
+/**
+ * Get full user information by email address (primary or additional email)
+ * First checks public.users table, then additional_emails if needed
+ */
+export async function getUserByEmail(
+	email: string,
+	supabaseAdmin?: SupabaseClient
+) {
+	const client = supabaseAdmin || createSupabaseAdmin();
+
+	try {
+		// First try to find user by primary email in public.users table
+		const { data: primaryUser, error: primaryError } = await client
+			.from("users")
+			.select("*")
+			.eq("email", email.toLowerCase())
+			.maybeSingle();
+
+		if (primaryError) {
+			console.error("Error finding user by primary email:", primaryError);
+		}
+
+		if (primaryUser) {
+			return primaryUser;
+		}
+
+		// If not found, check additional emails and join with users table
+		const { data: userViaAdditionalEmail, error: additionalError } = await client
+			.from("additional_emails")
+			.select(`
+				user_id,
+				users!inner (
+					id,
+					email,
+					created_at
+				)
+			`)
+			.eq("email_address", email.toLowerCase())
+			.eq("verified", true)
+			.maybeSingle();
+
+		if (additionalError) {
+			console.error("Error finding user by additional email:", additionalError);
+			return null;
+		}
+
+		return userViaAdditionalEmail?.users || null;
+	} catch (error) {
+		console.error("Error in getUserByEmail:", error);
+		return null;
+	}
 }

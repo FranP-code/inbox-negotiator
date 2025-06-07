@@ -1,0 +1,15 @@
+---
+import "@/styles/globals.css";
+import Layout from "../layouts/Layout.astro";
+import { Configuration as ConfigComponent } from "../components/Configuration";
+import { Navbar } from "../components/Navbar";
+import { AuthGuard } from "../components/AuthGuard";
+---
+
+<Layout title="Configuration - InboxNegotiator">
+	<Navbar client:load />
+
+	<AuthGuard requireAuth={true} client:load>
+		<ConfigComponent client:load />
+	</AuthGuard>
+</Layout>

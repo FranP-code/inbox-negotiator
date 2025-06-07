@@ -1,16 +1,15 @@
 import type { APIRoute } from "astro";
-import { supabase } from "../../lib/supabase";
 import {
 	createSupabaseAdmin,
 	handleDatabaseError,
+	getUserIdByEmail,
 } from "../../lib/supabase-admin";
 import { generateObject } from "ai";
 import {
 	createGoogleGenerativeAI,
-	google,
-	type GoogleGenerativeAIProviderOptions,
 } from "@ai-sdk/google";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Schema for debt information extraction
 const debtSchema = z.object({
@@ -71,6 +70,23 @@ async function parseDebtWithAI(emailText: string, fromEmail: string) {
 	}
 }
 
+
+// Function to increment email processing usage
+async function incrementEmailUsage(userId: string, supabaseAdmin: SupabaseClient) {
+	try {
+		// Call the database function to increment usage
+		const { error } = await supabaseAdmin.rpc('increment_email_usage', {
+			target_user_id: userId
+		});
+
+		if (error) {
+			console.error("Error incrementing email usage:", error);
+		}
+	} catch (error) {
+		console.error("Error calling increment_email_usage:", error);
+	}
+}
+
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		// Create service role client for webhook operations (bypasses RLS)
@@ -102,6 +118,17 @@ export const POST: APIRoute = async ({ request }) => {
 		const optOutKeywords = ["STOP", "UNSUBSCRIBE", "OPT-OUT", "REMOVE"];
 		const textBody = data.TextBody || data.HtmlBody || "";
 		const fromEmail = data.FromFull?.Email || data.From || "unknown";
+		const toEmail = data.ToFull?.[0]?.Email || data.To || "";
+
+		// Find the user who should receive this debt
+		const userId = await getUserIdByEmail(toEmail, supabaseAdmin);
+		if (!userId) {
+			console.warn(`No user found for email: ${toEmail}`);
+			return new Response("No matching user found", { status: 200 });
+		}
+
+		// Increment email processing usage
+		await incrementEmailUsage(userId, supabaseAdmin);
 
 		const hasOptOut = optOutKeywords.some((keyword) =>
 			textBody.toUpperCase().includes(keyword)
@@ -110,6 +137,7 @@ export const POST: APIRoute = async ({ request }) => {
 		if (hasOptOut) {
 			// Log opt-out and don't process further
 			const { error } = await supabaseAdmin.from("debts").insert({
+				user_id: userId,
 				vendor: fromEmail,
 				amount: 0,
 				raw_email: textBody,
@@ -146,6 +174,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const { data: insertedDebt, error: insertError } = await supabaseAdmin
 			.from("debts")
 			.insert({
+				user_id: userId,
 				vendor: debtInfo.vendor,
 				amount: debtInfo.amount,
 				raw_email: textBody,
@@ -156,6 +185,7 @@ export const POST: APIRoute = async ({ request }) => {
 					isDebtCollection: debtInfo.isDebtCollection,
 					subject: data.Subject,
 					fromEmail: fromEmail,
+					toEmail: toEmail,
 				},
 			})
 			.select()
