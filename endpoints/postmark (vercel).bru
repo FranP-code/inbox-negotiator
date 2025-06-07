@@ -1,0 +1,22 @@
+meta {
+  name: /api/postmark (vercel)
+  type: http
+  seq: 2
+}
+
+post {
+  url: https://inbox-negotiator.vercel.app/api/postmark
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "TextBody": "Dear customer, you owe $1,250.50 to CreditPlus for your January utility bills. Please pay by 2025-06-15 to avoid penalties.",
+    "FromFull": {
+      "Email": "billing@creditplus.com",
+      "Name": "CreditPlus Billing Department"
+    },
+    "Subject": "Outstanding Utility Bill Payment Due"
+  }
+}
