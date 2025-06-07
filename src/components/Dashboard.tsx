@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase, type Debt, type UserProfile } from "../lib/supabase";
-import { Button } from "@/components/ui/button";
+import { Button } from "./ui/button";
 import { DebtCard } from "./DebtCard";
 import { DebtTimeline } from "./DebtTimeline";
 import { OnboardingDialog } from "./OnboardingDialog";
@@ -10,10 +10,10 @@ import {
 	CardDescription,
 	CardHeader,
 	CardTitle,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+} from "./ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { Badge } from "./ui/badge";
+import { Separator } from "./ui/separator";
 import {
 	DollarSign,
 	TrendingUp,
@@ -315,7 +315,7 @@ export function Dashboard() {
 								<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
 									{debtList.map((debt) => (
 										<div key={debt.id} className="space-y-4">
-											<DebtCard debt={debt} />
+											<DebtCard debt={debt} onUpdate={fetchDebts} />
 											<Card className="bg-gray-50 dark:bg-gray-800/50">
 												<CardContent className="p-4">
 													<DebtTimeline debt={debt} />
