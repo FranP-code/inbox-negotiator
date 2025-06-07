@@ -25,6 +25,56 @@ const debtSchema = z.object({
 		.describe("Whether the debt information was successfully parsed"),
 });
 
+// Schema for opt-out detection
+const optOutSchema = z.object({
+	isOptOut: z.boolean().describe("Whether this email contains an opt-out request"),
+	confidence: z
+		.number()
+		.min(0)
+		.max(1)
+		.describe("Confidence level of the opt-out detection"),
+	reason: z
+		.string()
+		.describe("Explanation of why this was classified as opt-out or not"),
+});
+
+// Function to detect opt-out requests using AI
+async function detectOptOutWithAI(emailText: string, fromEmail: string) {
+	try {
+		const googleApiKey =
+			process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+			import.meta.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		if (!googleApiKey) {
+			console.warn("Google API key not configured, falling back to keyword detection");
+			return null;
+		}
+
+		const result = await generateObject({
+			model: createGoogleGenerativeAI({
+				apiKey: googleApiKey,
+			})("gemini-2.5-flash-preview-04-17"),
+			system: `You are an expert at analyzing email content to detect opt-out requests.
+			Analyze the email to determine if the sender is requesting to opt-out, unsubscribe, 
+			or stop receiving communications. Consider:
+			- Explicit opt-out keywords (STOP, UNSUBSCRIBE, REMOVE, etc.)
+			- Implicit requests to stop communication
+			- Context and tone indicating unwillingness to continue correspondence
+			- Legal language requesting cessation of contact
+			Be conservative - only flag as opt-out if you're confident it's a genuine request.`,
+			prompt: `Analyze this email for opt-out intent:
+			
+			From: ${fromEmail}
+			Content: ${emailText}`,
+			schema: optOutSchema,
+		});
+
+		return result.object;
+	} catch (error) {
+		console.error("AI opt-out detection error:", error);
+		return null;
+	}
+}
+
 // Function to parse debt information using AI
 async function parseDebtWithAI(emailText: string, fromEmail: string) {
 	try {
@@ -115,7 +165,6 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		// Check for opt-out keywords
-		const optOutKeywords = ["STOP", "UNSUBSCRIBE", "OPT-OUT", "REMOVE"];
 		const textBody = data.TextBody || data.HtmlBody || "";
 		const fromEmail = data.FromFull?.Email || data.From || "unknown";
 		const toEmail = data.ToFull?.[0]?.Email || data.To || "";
@@ -130,9 +179,21 @@ export const POST: APIRoute = async ({ request }) => {
 		// Increment email processing usage
 		await incrementEmailUsage(userId, supabaseAdmin);
 
-		const hasOptOut = optOutKeywords.some((keyword) =>
-			textBody.toUpperCase().includes(keyword)
-		);
+		// Check for opt-out using AI
+		const optOutDetection = await detectOptOutWithAI(textBody, fromEmail);
+		let hasOptOut = false;
+
+		if (optOutDetection) {
+			hasOptOut = optOutDetection.isOptOut && optOutDetection.confidence > 0.7;
+			console.log(`AI opt-out detection: ${hasOptOut} (confidence: ${optOutDetection.confidence})`);
+		} else {
+			// Fallback to keyword matching if AI is unavailable
+			const optOutKeywords = ["STOP", "UNSUBSCRIBE", "OPT-OUT", "REMOVE"];
+			hasOptOut = optOutKeywords.some((keyword) =>
+				textBody.toUpperCase().includes(keyword)
+			);
+			console.log("Using fallback keyword opt-out detection");
+		}
 
 		if (hasOptOut) {
 			// Log opt-out and don't process further
