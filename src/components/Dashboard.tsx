@@ -169,7 +169,9 @@ export function Dashboard() {
 		active: debts.filter((debt) =>
 			["received", "negotiating"].includes(debt.status)
 		),
-		settled: debts.filter((debt) => debt.status === "settled"),
+		settled: debts.filter((debt) =>
+			["settled", "approved", "sent"].includes(debt.status)
+		),
 		failed: debts.filter((debt) =>
 			["failed", "opted_out"].includes(debt.status)
 		),

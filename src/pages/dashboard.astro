@@ -1,15 +1,17 @@
 ---
-import '@/styles/globals.css'
-import Layout from '../layouts/Layout.astro';
-import { Dashboard } from '../components/Dashboard';
-import { AuthGuard } from '../components/AuthGuard';
-import { Navbar } from '../components/Navbar';
+import "@/styles/globals.css";
+import Layout from "../layouts/Layout.astro";
+import { Dashboard } from "../components/Dashboard";
+import { AuthGuard } from "../components/AuthGuard";
+import { Navbar } from "../components/Navbar";
+import { Toaster } from "../components/ui/sonner";
 ---
 
 <Layout title="Dashboard - InboxNegotiator">
-  <Navbar client:load />
-  
-  <AuthGuard requireAuth={true} client:load>
-    <Dashboard client:load />
-  </AuthGuard>
+	<Navbar client:load />
+
+	<AuthGuard requireAuth={true} client:load>
+		<Dashboard client:load />
+	</AuthGuard>
+	<Toaster client:load />
 </Layout>

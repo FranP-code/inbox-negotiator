@@ -5,20 +5,20 @@ import {
 	type UserProfile,
 	type EmailProcessingUsage,
 } from "../lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
 	Card,
 	CardContent,
 	CardDescription,
 	CardHeader,
 	CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
+} from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Progress } from "./ui/progress";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Separator } from "./ui/separator";
 import {
 	Settings,
 	Mail,
@@ -31,7 +31,7 @@ import {
 	AlertCircle,
 	UserCheck,
 } from "lucide-react";
-import { toast } from "../hooks/use-toast";
+import { toast } from "sonner";
 
 export function Configuration() {
 	const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -54,6 +54,10 @@ export function Configuration() {
 		phone_number: "",
 	});
 	const [savingPersonalData, setSavingPersonalData] = useState(false);
+
+	// Server token state
+	const [serverToken, setServerToken] = useState("");
+	const [savingServerToken, setSavingServerToken] = useState(false);
 
 	useEffect(() => {
 		fetchUserData();
@@ -112,6 +116,11 @@ export function Configuration() {
 					phone_number: userData.phone_number || "",
 				});
 			}
+
+			// Set server token
+			if (profileData) {
+				setServerToken(profileData.postmark_server_token || "");
+			}
 		} catch (error) {
 			console.error("Error fetching user data:", error);
 		} finally {
@@ -142,18 +151,49 @@ export function Configuration() {
 
 			if (error) throw error;
 
-			toast({
-				title: "Personal data updated",
+			toast.success("Personal data updated", {
 				description: "Your personal information has been saved successfully.",
 			});
 		} catch (error: any) {
-			toast({
-				title: "Error saving personal data",
+			toast.error("Error saving personal data", {
 				description: error.message,
-				variant: "destructive",
 			});
 		} finally {
 			setSavingPersonalData(false);
+		}
+	};
+
+	const saveServerToken = async () => {
+		setSavingServerToken(true);
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
+			const { error } = await supabase
+				.from("user_profiles")
+				.update({
+					postmark_server_token: serverToken || null,
+				})
+				.eq("user_id", user.id);
+
+			if (error) throw error;
+
+			// Update local profile state
+			setProfile((prev) =>
+				prev ? { ...prev, postmark_server_token: serverToken || null } : null
+			);
+
+			toast.success("Server token updated", {
+				description: "Your Postmark server token has been saved successfully.",
+			});
+		} catch (error: any) {
+			toast.error("Error saving server token", {
+				description: error.message,
+			});
+		} finally {
+			setSavingServerToken(false);
 		}
 	};
 
@@ -180,15 +220,12 @@ export function Configuration() {
 
 			setAdditionalEmails([data, ...additionalEmails]);
 			setNewEmail("");
-			toast({
-				title: "Email added successfully",
+			toast.success("Email added successfully", {
 				description: "Additional email has been added to your account.",
 			});
 		} catch (error: any) {
-			toast({
-				title: "Error adding email",
+			toast.error("Error adding email", {
 				description: error.message,
-				variant: "destructive",
 			});
 		} finally {
 			setAddingEmail(false);
@@ -207,15 +244,12 @@ export function Configuration() {
 			setAdditionalEmails(
 				additionalEmails.filter((email) => email.id !== emailId)
 			);
-			toast({
-				title: "Email removed",
+			toast.success("Email removed", {
 				description: "Additional email has been removed from your account.",
 			});
 		} catch (error: any) {
-			toast({
-				title: "Error removing email",
+			toast.error("Error removing email", {
 				description: error.message,
-				variant: "destructive",
 			});
 		}
 	};
@@ -315,6 +349,55 @@ export function Configuration() {
 									</AlertDescription>
 								</Alert>
 							)}
+						</CardContent>
+					</Card>
+
+					{/* Email Settings */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<Mail className="h-5 w-5" />
+								Email Settings
+							</CardTitle>
+							<CardDescription>
+								Configure your Postmark server token to enable sending approved
+								negotiation emails
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="server_token">Postmark Server Token</Label>
+								<Input
+									id="server_token"
+									type="password"
+									placeholder="Enter your Postmark server token"
+									value={serverToken}
+									onChange={(e) => setServerToken(e.target.value)}
+								/>
+								<p className="text-sm text-muted-foreground">
+									Required to send approved negotiation emails. You can get this
+									from your{" "}
+									<a
+										href="https://account.postmarkapp.com/servers"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-primary hover:underline"
+									>
+										Postmark dashboard
+									</a>
+									.
+								</p>
+							</div>
+
+							<div className="flex justify-end">
+								<Button
+									onClick={saveServerToken}
+									disabled={savingServerToken}
+									className="min-w-[120px]"
+								>
+									{savingServerToken ? "Saving..." : "Save Token"}
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 

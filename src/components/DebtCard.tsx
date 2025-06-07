@@ -20,15 +20,31 @@ import {
 	DialogTrigger,
 } from "./ui/dialog";
 import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "./ui/alert-dialog";
+import {
 	Calendar,
 	DollarSign,
 	Mail,
 	FileText,
 	TrendingUp,
 	Edit3,
+	CheckCircle,
+	XCircle,
+	AlertCircle,
+	ExternalLink,
+	Eye,
 } from "lucide-react";
 import { supabase, type Debt, type DebtVariable } from "../lib/supabase";
-import { toast } from "../hooks/use-toast";
+import { toast } from "sonner";
 
 interface DebtCardProps {
 	debt: Debt;
@@ -40,6 +56,9 @@ const statusColors = {
 		"bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
 	negotiating:
 		"bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800",
+	approved:
+		"bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800",
+	sent: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800",
 	settled:
 		"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800",
 	failed:
@@ -51,12 +70,25 @@ const statusColors = {
 const statusLabels = {
 	received: "Received",
 	negotiating: "Negotiating",
+	approved: "Approved",
+	sent: "Sent",
 	settled: "Settled",
 	failed: "Failed",
 	opted_out: "Opted Out",
 };
 
 export function DebtCard({ debt, onUpdate }: DebtCardProps) {
+	const [isApproving, setIsApproving] = useState(false);
+	const [isRejecting, setIsRejecting] = useState(false);
+	const [userProfile, setUserProfile] = useState<any>(null);
+	const [hasServerToken, setHasServerToken] = useState(false);
+
+	const isReadOnly =
+		debt.status === "approved" ||
+		debt.status === "sent" ||
+		debt.status === "failed" ||
+		debt.status === "opted_out";
+
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat("en-US", {
 			style: "currency",
@@ -109,6 +141,8 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 		const [subject, setSubject] = useState("");
 		const [body, setBody] = useState("");
 		const [variables, setVariables] = useState<Record<string, string>>({});
+
+		// Check if debt is in read-only state (approved or sent)
 
 		// Load variables from database
 		const loadVariables = async () => {
@@ -284,10 +318,8 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 
 				if (error) {
 					console.error("Error saving debt metadata:", error);
-					toast({
-						title: "Error",
+					toast.error("Error", {
 						description: "Failed to save email changes. Please try again.",
-						variant: "destructive",
 					});
 					return;
 				}
@@ -295,8 +327,7 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 				// Save variables to database
 				await saveVariables(variables);
 
-				toast({
-					title: "Changes saved",
+				toast.success("Changes saved", {
 					description:
 						"Your email and variables have been updated successfully.",
 				});
@@ -309,10 +340,8 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 				setIsEditing(false);
 			} catch (error) {
 				console.error("Error saving changes:", error);
-				toast({
-					title: "Error",
+				toast.error("Error", {
 					description: "Failed to save changes. Please try again.",
-					variant: "destructive",
 				});
 			} finally {
 				setIsSaving(false);
@@ -325,15 +354,25 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 			<Dialog>
 				<DialogTrigger asChild>
 					<Button variant="outline" size="sm" className="flex-1">
-						<Edit3 className="h-4 w-4 mr-2" />
-						Edit Response
+						{isReadOnly ? (
+							<Eye className="h-4 w-4 mr-2" />
+						) : (
+							<Edit3 className="h-4 w-4 mr-2" />
+						)}
+						{isReadOnly ? "See Response" : "Edit Response"}
 					</Button>
 				</DialogTrigger>
 				<DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
 					<DialogHeader>
-						<DialogTitle>Edit Negotiation Response</DialogTitle>
+						<DialogTitle>
+							{isReadOnly
+								? "View Negotiation Response"
+								: "Edit Negotiation Response"}
+						</DialogTitle>
 						<DialogDescription>
-							Customize your FDCPA-compliant response before sending
+							{isReadOnly
+								? "Review your FDCPA-compliant response"
+								: "Customize your FDCPA-compliant response before sending"}
 						</DialogDescription>
 					</DialogHeader>
 
@@ -363,10 +402,12 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 												id={`var-${variableName}`}
 												value={value}
 												onChange={(e) =>
+													!isReadOnly &&
 													handleVariableChange(variableName, e.target.value)
 												}
 												placeholder={`Enter ${variableName.toLowerCase()}`}
 												className="w-full"
+												readOnly={isReadOnly}
 											/>
 										</div>
 									))}
@@ -383,9 +424,12 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 							<Input
 								id="subject"
 								value={subject}
-								onChange={(e) => handleSubjectChange(e.target.value)}
+								onChange={(e) =>
+									!isReadOnly && handleSubjectChange(e.target.value)
+								}
 								placeholder="Enter email subject (use {{ Variable Name }} for placeholders)"
 								className="w-full"
+								readOnly={isReadOnly}
 							/>
 							{/* Preview of subject with variables replaced */}
 							{Object.keys(variables).length > 0 && (
@@ -401,9 +445,12 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 							<Textarea
 								id="body"
 								value={body}
-								onChange={(e) => handleBodyChange(e.target.value)}
+								onChange={(e) =>
+									!isReadOnly && handleBodyChange(e.target.value)
+								}
 								placeholder="Enter email body (use {{ Variable Name }} for placeholders)"
 								className="w-full min-h-[300px] font-mono text-sm"
+								readOnly={isReadOnly}
 							/>
 							{/* Preview of body with variables replaced */}
 							{Object.keys(variables).length > 0 && (
@@ -417,18 +464,181 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 						</div>
 
 						{/* Action Buttons */}
-						<div className="flex justify-end gap-2 border-t pt-4">
-							<Button variant="outline" onClick={() => setIsEditing(false)}>
-								Cancel
-							</Button>
-							<Button onClick={handleSave} disabled={isSaving}>
-								{isSaving ? "Saving..." : "Save Changes"}
-							</Button>
-						</div>
+						{!isReadOnly && (
+							<div className="flex justify-end gap-2 border-t pt-4">
+								<Button variant="outline" onClick={() => setIsEditing(false)}>
+									Cancel
+								</Button>
+								<Button onClick={handleSave} disabled={isSaving}>
+									{isSaving ? "Saving..." : "Save Changes"}
+								</Button>
+							</div>
+						)}
 					</div>
 				</DialogContent>
 			</Dialog>
 		);
+	};
+
+	// Check if user has server token configured
+	useEffect(() => {
+		checkServerToken();
+	}, []);
+
+	const checkServerToken = async () => {
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
+			const { data: profile } = await supabase
+				.from("user_profiles")
+				.select("postmark_server_token")
+				.eq("user_id", user.id)
+				.single();
+
+			setUserProfile(profile);
+			setHasServerToken(!!profile?.postmark_server_token);
+		} catch (error) {
+			console.error("Error checking server token:", error);
+		}
+	};
+
+	// Handle approve action
+	const handleApprove = async (sendEmail = true) => {
+		if (!hasServerToken && sendEmail) {
+			toast.error("Server Token Required", {
+				description:
+					"Please configure your Postmark server token in settings first.",
+			});
+			return;
+		}
+
+		setIsApproving(true);
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) throw new Error("User not authenticated");
+
+			if (sendEmail) {
+				// Call the send-email function
+				const { data, error } = await supabase.functions.invoke("send-email", {
+					body: {
+						debtId: debt.id,
+					},
+				});
+
+				if (error) throw error;
+
+				if (data.requiresConfiguration) {
+					toast.error("Configuration Required", {
+						description:
+							"Please set up your Postmark server token in configuration.",
+					});
+					return;
+				}
+
+				toast.success("Email Sent Successfully", {
+					description: `Negotiation email sent to ${data.sentTo}`,
+				});
+			} else {
+				// Call the approve-debt function to handle approval without sending email
+				const { data, error } = await supabase.functions.invoke(
+					"approve-debt",
+					{
+						body: {
+							debtId: debt.id,
+							approvalNote: "Approved by user without sending email",
+						},
+					}
+				);
+
+				if (error) throw error;
+
+				toast.success("Debt Approved", {
+					description: `Negotiation for ${data.vendor} has been approved and saved.`,
+				});
+			}
+
+			// Refresh the data
+			if (onUpdate) onUpdate();
+		} catch (error: any) {
+			console.error("Error in approval process:", error);
+			const action = sendEmail ? "send email" : "approve debt";
+			toast.error(`Failed to ${action}`, {
+				description:
+					error.message || `An error occurred while trying to ${action}.`,
+			});
+		} finally {
+			setIsApproving(false);
+		}
+	};
+
+	// Handle reject action
+	const handleReject = async () => {
+		setIsRejecting(true);
+		try {
+			const { error } = await supabase
+				.from("debts")
+				.update({
+					status: "opted_out",
+					metadata: {
+						...debt.metadata,
+						rejected: {
+							rejectedAt: new Date().toISOString(),
+							reason: "User rejected negotiation",
+						},
+					},
+				})
+				.eq("id", debt.id);
+
+			if (error) throw error;
+
+			// Log the action
+			await supabase.from("audit_logs").insert({
+				debt_id: debt.id,
+				action: "negotiation_rejected",
+				details: {
+					rejectedAt: new Date().toISOString(),
+					reason: "User rejected negotiation",
+				},
+			});
+
+			toast.success("Negotiation Rejected", {
+				description: "The negotiation has been marked as rejected.",
+			});
+
+			// Refresh the data
+			if (onUpdate) onUpdate();
+		} catch (error: any) {
+			console.error("Error rejecting negotiation:", error);
+			toast.error("Failed to Reject", {
+				description:
+					error.message || "An error occurred while rejecting the negotiation.",
+			});
+		} finally {
+			setIsRejecting(false);
+		}
+	};
+
+	// Check if approve button should be enabled
+	const canApprove = (sendEmail = true) => {
+		if (sendEmail) {
+			return (
+				debt.metadata?.aiEmail &&
+				debt.status === "negotiating" &&
+				hasServerToken
+			);
+		} else {
+			return debt.metadata?.aiEmail && debt.status === "negotiating";
+		}
+	};
+
+	// Check if buttons should be shown
+	const showApproveRejectButtons = () => {
+		return debt.metadata?.aiEmail && debt.status === "negotiating";
 	};
 
 	return (
@@ -470,31 +680,141 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 					)}
 				</div>
 
-				<div className="flex gap-2">
-					<Dialog>
-						<DialogTrigger asChild>
-							<Button variant="outline" size="sm" className="flex-1">
-								<Mail className="h-4 w-4 mr-2" />
-								View Email
-							</Button>
-						</DialogTrigger>
-						<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-							<DialogHeader>
-								<DialogTitle>Original Email</DialogTitle>
-								<DialogDescription>
-									From: {debt.vendor} • {formatDate(debt.created_at)}
-								</DialogDescription>
-							</DialogHeader>
-							<div className="mt-4">
-								<pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
-									{debt.raw_email || "No email content available"}
-								</pre>
-							</div>
-						</DialogContent>
-					</Dialog>
+				<div className="space-y-3">
+					<div className="flex gap-2">
+						<Dialog>
+							<DialogTrigger asChild>
+								<Button variant="outline" size="sm" className="flex-1">
+									<Mail className="h-4 w-4 mr-2" />
+									View Email
+								</Button>
+							</DialogTrigger>
+							<DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+								<DialogHeader>
+									<DialogTitle>Original Email</DialogTitle>
+									<DialogDescription>
+										From: {debt.vendor} • {formatDate(debt.created_at)}
+									</DialogDescription>
+								</DialogHeader>
+								<div className="mt-4">
+									<pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-700">
+										{debt.raw_email || "No email content available"}
+									</pre>
+								</div>
+							</DialogContent>
+						</Dialog>
 
-					{debt.metadata?.aiEmail && <EditableResponseDialog />}
+						{debt.metadata?.aiEmail && <EditableResponseDialog />}
+					</div>
+
+					{/* Approve/Reject Buttons */}
+					{showApproveRejectButtons() && (
+						<div className="space-y-2">
+							{!hasServerToken && (
+								<div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+									<AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+									<span className="text-sm text-amber-700 dark:text-amber-300 flex-1">
+										Configure your Postmark server token to enable email
+										sending.
+									</span>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => (window.location.href = "/configuration")}
+										className="text-amber-700 border-amber-300 hover:bg-amber-100"
+									>
+										<ExternalLink className="h-3 w-3 mr-1" />
+										Settings
+									</Button>
+								</div>
+							)}
+
+							<div className="flex gap-2">
+								<AlertDialog>
+									<AlertDialogTrigger asChild>
+										<Button
+											variant="default"
+											size="sm"
+											className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+											disabled={!canApprove(true) || isApproving}
+										>
+											<CheckCircle className="h-4 w-4 mr-2" />
+											{isApproving ? "Sending..." : "Approve & Send"}
+										</Button>
+									</AlertDialogTrigger>
+									<AlertDialogContent>
+										<AlertDialogHeader>
+											<AlertDialogTitle>
+												Send Negotiation Email
+											</AlertDialogTitle>
+											<AlertDialogDescription>
+												This will send the approved negotiation email to{" "}
+												{debt.vendor}. Make sure you have reviewed and are
+												satisfied with the email content.
+											</AlertDialogDescription>
+										</AlertDialogHeader>
+										<AlertDialogFooter>
+											<AlertDialogCancel>Cancel</AlertDialogCancel>
+											<AlertDialogAction
+												onClick={() => handleApprove()}
+												className="bg-green-600 hover:bg-green-700"
+											>
+												Send Email
+											</AlertDialogAction>
+										</AlertDialogFooter>
+									</AlertDialogContent>
+								</AlertDialog>
+								<Button
+									variant="outline"
+									className="flex-1"
+									onClick={() => handleApprove(false)}
+									disabled={isApproving || isRejecting || !canApprove(false)}
+								>
+									<CheckCircle className="h-4 w-4 mr-2" />
+									Approve
+								</Button>
+							</div>
+						</div>
+					)}
 				</div>
+
+				{/* Reject Button - only show if debt is not approved or sent */}
+				{!isReadOnly && (
+					<div className="flex justify-end gap-2">
+						<AlertDialog>
+							<AlertDialogTrigger asChild>
+								<Button
+									variant="destructive"
+									size="sm"
+									className="flex-1"
+									disabled={isRejecting}
+								>
+									<XCircle className="h-4 w-4 mr-2" />
+									{isRejecting ? "Rejecting..." : "Reject"}
+								</Button>
+							</AlertDialogTrigger>
+							<AlertDialogContent>
+								<AlertDialogHeader>
+									<AlertDialogTitle>Reject Negotiation</AlertDialogTitle>
+									<AlertDialogDescription>
+										This will mark the negotiation as rejected and opt you out
+										of this debt collection process. This action cannot be
+										undone.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel>Cancel</AlertDialogCancel>
+									<AlertDialogAction
+										onClick={handleReject}
+										className="bg-red-600 hover:bg-red-700"
+									>
+										Reject
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
+					</div>
+				)}
 			</CardContent>
 		</Card>
 	);

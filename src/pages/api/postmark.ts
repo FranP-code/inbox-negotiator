@@ -1,13 +1,11 @@
 import type { APIRoute } from "astro";
 import {
 	createSupabaseAdmin,
-	handleDatabaseError,
 	getUserIdByEmail,
+	handleDatabaseError,
 } from "../../lib/supabase-admin";
 import { generateObject } from "ai";
-import {
-	createGoogleGenerativeAI,
-} from "@ai-sdk/google";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -27,7 +25,9 @@ const debtSchema = z.object({
 
 // Schema for opt-out detection
 const optOutSchema = z.object({
-	isOptOut: z.boolean().describe("Whether this email contains an opt-out request"),
+	isOptOut: z.boolean().describe(
+		"Whether this email contains an opt-out request",
+	),
 	confidence: z
 		.number()
 		.min(0)
@@ -41,11 +41,12 @@ const optOutSchema = z.object({
 // Function to detect opt-out requests using AI
 async function detectOptOutWithAI(emailText: string, fromEmail: string) {
 	try {
-		const googleApiKey =
-			process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+		const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
 			import.meta.env.GOOGLE_GENERATIVE_AI_API_KEY;
 		if (!googleApiKey) {
-			console.warn("Google API key not configured, falling back to keyword detection");
+			console.warn(
+				"Google API key not configured, falling back to keyword detection",
+			);
 			return null;
 		}
 
@@ -53,7 +54,8 @@ async function detectOptOutWithAI(emailText: string, fromEmail: string) {
 			model: createGoogleGenerativeAI({
 				apiKey: googleApiKey,
 			})("gemini-2.5-flash-preview-04-17"),
-			system: `You are an expert at analyzing email content to detect opt-out requests.
+			system:
+				`You are an expert at analyzing email content to detect opt-out requests.
 			Analyze the email to determine if the sender is requesting to opt-out, unsubscribe, 
 			or stop receiving communications. Consider:
 			- Explicit opt-out keywords (STOP, UNSUBSCRIBE, REMOVE, etc.)
@@ -79,12 +81,11 @@ async function detectOptOutWithAI(emailText: string, fromEmail: string) {
 async function parseDebtWithAI(emailText: string, fromEmail: string) {
 	try {
 		// Check if Google API key is available
-		const googleApiKey =
-			process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+		const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
 			import.meta.env.GOOGLE_GENERATIVE_AI_API_KEY;
 		if (!googleApiKey) {
 			console.warn(
-				"Google API key not configured, falling back to regex parsing"
+				"Google API key not configured, falling back to regex parsing",
 			);
 			throw new Error("No Google API key configured");
 		}
@@ -93,7 +94,8 @@ async function parseDebtWithAI(emailText: string, fromEmail: string) {
 			model: createGoogleGenerativeAI({
 				apiKey: googleApiKey,
 			})("gemini-2.5-flash-preview-04-17"),
-			system: `You are an expert at analyzing debt collection and billing emails. 
+			system:
+				`You are an expert at analyzing debt collection and billing emails. 
       Extract key debt information from the email content. 
       Look for monetary amounts, creditor information, what the debt is for, and due dates.
       If this doesn't appear to be a legitimate debt or billing notice, set amount to 0.
@@ -120,13 +122,15 @@ async function parseDebtWithAI(emailText: string, fromEmail: string) {
 	}
 }
 
-
 // Function to increment email processing usage
-async function incrementEmailUsage(userId: string, supabaseAdmin: SupabaseClient) {
+async function incrementEmailUsage(
+	userId: string,
+	supabaseAdmin: SupabaseClient,
+) {
 	try {
 		// Call the database function to increment usage
-		const { error } = await supabaseAdmin.rpc('increment_email_usage', {
-			target_user_id: userId
+		const { error } = await supabaseAdmin.rpc("increment_email_usage", {
+			target_user_id: userId,
 		});
 
 		if (error) {
@@ -150,7 +154,7 @@ export const POST: APIRoute = async ({ request }) => {
 				{
 					status: 500,
 					headers: { "Content-Type": "application/json" },
-				}
+				},
 			);
 		}
 
@@ -185,7 +189,9 @@ export const POST: APIRoute = async ({ request }) => {
 
 		if (optOutDetection) {
 			hasOptOut = optOutDetection.isOptOut && optOutDetection.confidence > 0.7;
-			console.log(`AI opt-out detection: ${hasOptOut} (confidence: ${optOutDetection.confidence})`);
+			console.log(
+				`AI opt-out detection: ${hasOptOut} (confidence: ${optOutDetection.confidence})`,
+			);
 		} else {
 			// Fallback to keyword matching if AI is unavailable
 			const optOutKeywords = ["STOP", "UNSUBSCRIBE", "OPT-OUT", "REMOVE"];
@@ -227,7 +233,7 @@ export const POST: APIRoute = async ({ request }) => {
 				{
 					status: 400,
 					headers: { "Content-Type": "application/json" },
-				}
+				},
 			);
 		}
 
@@ -264,7 +270,7 @@ export const POST: APIRoute = async ({ request }) => {
 				{
 					status: 500,
 					headers: { "Content-Type": "application/json" },
-				}
+				},
 			);
 		}
 
@@ -283,20 +289,19 @@ export const POST: APIRoute = async ({ request }) => {
 		// Trigger negotiation function if this is a legitimate debt
 		if (debtInfo.amount > 0 && debtInfo.isDebtCollection) {
 			// Access environment variables through Astro runtime
-			const supabaseUrl =
-				process.env.SUPABASE_URL || import.meta.env.PUBLIC_SUPABASE_URL;
-			const supabaseAnonKey =
-				process.env.SUPABASE_ANON_KEY ||
-				import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+			const supabaseUrl = process.env.SUPABASE_URL ||
+				import.meta.env.PUBLIC_SUPABASE_URL;
+			const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+				import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
 
-			if (supabaseUrl && supabaseAnonKey) {
+			if (supabaseUrl && supabaseServiceKey) {
 				const negotiateUrl = `${supabaseUrl}/functions/v1/negotiate`;
 
 				try {
 					await fetch(negotiateUrl, {
 						method: "POST",
 						headers: {
-							Authorization: `Bearer ${supabaseAnonKey}`,
+							Authorization: `Bearer ${supabaseServiceKey}`,
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify({ record: insertedDebt }),
@@ -307,7 +312,7 @@ export const POST: APIRoute = async ({ request }) => {
 				}
 			} else {
 				console.warn(
-					"Supabase environment variables not configured for negotiation trigger"
+					"Supabase environment variables not configured for negotiation trigger",
 				);
 			}
 		}

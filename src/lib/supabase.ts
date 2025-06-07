@@ -22,7 +22,14 @@ export type Debt = {
   vendor: string;
   amount: number;
   raw_email: string | null;
-  status: "received" | "negotiating" | "settled" | "failed" | "opted_out";
+  status:
+    | "received"
+    | "negotiating"
+    | "approved"
+    | "sent"
+    | "settled"
+    | "failed"
+    | "opted_out";
   negotiated_plan: string | null;
   projected_savings: number;
   user_id: string;
@@ -47,6 +54,7 @@ export type UserProfile = {
   onboarding_completed: boolean;
   first_login_at: string | null;
   email_processing_limit: number;
+  postmark_server_token: string | null;
 };
 
 export type AdditionalEmail = {

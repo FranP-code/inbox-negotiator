@@ -222,29 +222,32 @@ I am writing to propose a payment arrangement to resolve this matter.`;
   let proposal = "";
 
   switch (strategy) {
-    case "extension":
+    case "extension": {
       proposal =
         ` I respectfully request a 30-day extension to arrange full payment. I anticipate being able to settle this account in full by {{ Proposed Payment Date }}.
 
 During this extension period, I request that no additional fees or interest be applied to maintain the current balance.`;
       break;
+    }
 
-    case "installment":
+    case "installment": {
       const monthlyPayment = (record.amount / 3).toFixed(2);
       proposal = ` I am able to pay the full balance of $${
         record.amount.toFixed(2)
       } through an installment plan. I propose to make three (3) equal monthly payments of $${monthlyPayment}, with the first payment to be made on {{ Proposed Start Date }}.`;
       break;
+    }
 
-    case "settlement":
+    case "settlement": {
       const settlementAmount = (record.amount * 0.6).toFixed(2);
       proposal =
         ` I would like to propose a lump-sum settlement offer of $${settlementAmount} (60% of the current balance) to resolve this matter completely.
 
 This settlement would be paid within 10 business days of written acceptance of this offer. Upon payment, I request written confirmation that this account will be considered paid in full and closed.`;
       break;
+    }
 
-    case "dispute":
+    case "dispute": {
       proposal =
         ` I am formally disputing this debt and requesting validation under Section 809(b) of the Fair Debt Collection Practices Act.
 
@@ -256,6 +259,7 @@ Please provide:
 
 Until proper validation is provided, I request that all collection activities cease.`;
       break;
+    }
   }
 
   const closingResponse = `
@@ -273,88 +277,129 @@ ${personalData.full_name || "{{ Your Typed Name }}"}`;
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
-    if (req.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders });
+    if (req.method !== "POST") {
+      return new Response(
+        JSON.stringify({ error: "Method not allowed" }),
+        {
+          status: 405,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const { record }: { record: DebtRecord } = await req.json();
+    // Check if this is a webhook call (using service role) or authenticated user call
+    const authHeader = req.headers.get("Authorization");
+    const isServiceRoleCall = authHeader?.includes(
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+    );
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    let user: { id: string } | null = null;
+    let supabaseClient;
 
-    // Fetch user personal data
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select(
-        "full_name, address_line_1, address_line_2, city, state, zip_code, phone_number",
-      )
-      .eq("id", record.user_id)
-      .single();
+    if (isServiceRoleCall) {
+      // This is a webhook/service call - use admin client
+      supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
 
-    if (userError) {
-      console.error("Error fetching user data:", userError);
-    }
+      // For webhook calls, we'll get the userId from the request body along with the record
+      const { record }: { record: DebtRecord } = await req.json();
 
-    const personalData: PersonalData = userData || {};
+      if (!record || !record.user_id) {
+        return new Response(
+          JSON.stringify({
+            error: "Missing record or user_id for service call",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
 
-    // Generate AI-powered negotiation email
-    const emailResult = await generateNegotiationEmail(record, personalData);
+      user = { id: record.user_id };
 
-    // Update debt record with AI-generated content
-    const { error: updateError } = await supabase
-      .from("debts")
-      .update({
-        negotiated_plan:
-          `Subject: ${emailResult.subject}\n\n${emailResult.body}`,
-        projected_savings: emailResult.projectedSavings,
-        status: "negotiating",
-        metadata: {
-          ...record.metadata,
-          aiEmail: {
-            subject: emailResult.subject,
-            body: emailResult.body,
-            strategy: emailResult.strategy,
-            confidence: emailResult.confidenceLevel,
-            reasoning: emailResult.reasoning,
-            customTerms: emailResult.customTerms,
+      // Use the record as-is for webhook calls
+      const personalData = await fetchUserPersonalData(supabaseClient, user.id);
+      return await processNegotiation(supabaseClient, record, personalData);
+    } else {
+      // This is an authenticated user call
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: "Authorization header required" }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Initialize Supabase client with auth context
+      supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        {
+          global: {
+            headers: { Authorization: authHeader },
           },
         },
-      })
-      .eq("id", record.id);
+      );
 
-    if (updateError) {
-      throw updateError;
+      const token = authHeader.replace("Bearer ", "");
+      const { data: userData } = await supabaseClient.auth.getUser(token);
+      user = userData.user;
+
+      if (!user) {
+        return new Response(
+          JSON.stringify({ error: "Unauthorized" }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const { debtId }: { debtId: string } = await req.json();
+
+      if (!debtId) {
+        return new Response(
+          JSON.stringify({ error: "Missing debtId" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Fetch debt record - RLS will ensure user can only access their own debts
+      const { data: debtRecord, error: debtError } = await supabaseClient
+        .from("debts")
+        .select("*")
+        .eq("id", debtId)
+        .eq("user_id", user.id)
+        .single();
+
+      if (debtError || !debtRecord) {
+        return new Response(
+          JSON.stringify({ error: "Debt not found or access denied" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const record = debtRecord as DebtRecord;
+      const personalData = await fetchUserPersonalData(supabaseClient, user.id);
+      return await processNegotiation(supabaseClient, record, personalData);
     }
-
-    // Log the action
-    await supabase
-      .from("audit_logs")
-      .insert({
-        debt_id: record.id,
-        action: "negotiation_generated",
-        details: {
-          strategy: emailResult.strategy,
-          amount: record.amount,
-          projected_savings: emailResult.projectedSavings,
-          ai_confidence: emailResult.confidenceLevel,
-          reasoning: emailResult.reasoning,
-        },
-      });
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        strategy: emailResult.strategy,
-        projected_savings: emailResult.projectedSavings,
-        confidence: emailResult.confidenceLevel,
-        reasoning: emailResult.reasoning,
-        subject: emailResult.subject,
-        body: emailResult.body,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
   } catch (error) {
     console.error("Negotiation function error:", error);
     const errorMessage = error instanceof Error
@@ -372,3 +417,107 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// Helper function to fetch user personal data
+async function fetchUserPersonalData(
+  supabaseClient: ReturnType<typeof createClient>,
+  userId: string,
+): Promise<PersonalData>;
+async function fetchUserPersonalData(
+  supabaseClient: unknown,
+  userId: string,
+): Promise<PersonalData>;
+async function fetchUserPersonalData(
+  supabaseClient: unknown,
+  userId: string,
+): Promise<PersonalData> {
+  const client = supabaseClient as ReturnType<typeof createClient>;
+  const { data: userPersonalData, error: userError } = await client
+    .from("users")
+    .select(
+      "full_name, address_line_1, address_line_2, city, state, zip_code, phone_number",
+    )
+    .eq("id", userId)
+    .single();
+
+  if (userError) {
+    console.error("Error fetching user data:", userError);
+  }
+
+  return (userPersonalData as PersonalData) || {};
+}
+
+// Helper function to process the negotiation
+async function processNegotiation(
+  supabaseClient: ReturnType<typeof createClient>,
+  record: DebtRecord,
+  personalData: PersonalData,
+): Promise<Response>;
+async function processNegotiation(
+  supabaseClient: unknown,
+  record: DebtRecord,
+  personalData: PersonalData,
+): Promise<Response>;
+async function processNegotiation(
+  supabaseClient: unknown,
+  record: DebtRecord,
+  personalData: PersonalData,
+): Promise<Response> {
+  const client = supabaseClient as ReturnType<typeof createClient>;
+
+  // Generate AI-powered negotiation email
+  const emailResult = await generateNegotiationEmail(record, personalData);
+
+  // Update debt record with AI-generated content - using provided client
+  const { error: updateError } = await client
+    .from("debts")
+    .update({
+      negotiated_plan: `Subject: ${emailResult.subject}\n\n${emailResult.body}`,
+      projected_savings: emailResult.projectedSavings,
+      status: "negotiating",
+      metadata: {
+        ...record.metadata,
+        aiEmail: {
+          subject: emailResult.subject,
+          body: emailResult.body,
+          strategy: emailResult.strategy,
+          confidence: emailResult.confidenceLevel,
+          reasoning: emailResult.reasoning,
+          customTerms: emailResult.customTerms,
+        },
+      },
+    })
+    .eq("id", record.id);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  // Log the action - using provided client
+  await client
+    .from("audit_logs")
+    .insert({
+      debt_id: record.id,
+      action: "negotiation_generated",
+      details: {
+        strategy: emailResult.strategy,
+        amount: record.amount,
+        projected_savings: emailResult.projectedSavings,
+        ai_confidence: emailResult.confidenceLevel,
+        reasoning: emailResult.reasoning,
+      },
+    });
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      strategy: emailResult.strategy,
+      projected_savings: emailResult.projectedSavings,
+      confidence: emailResult.confidenceLevel,
+      reasoning: emailResult.reasoning,
+      subject: emailResult.subject,
+      body: emailResult.body,
+    }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+}

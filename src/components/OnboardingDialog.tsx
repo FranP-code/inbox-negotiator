@@ -1,18 +1,18 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from "./ui/dialog";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Mail, Plus, CheckCircle, ArrowRight, UserCheck } from "lucide-react";
-import { toast } from "../hooks/use-toast";
+import { toast } from "sonner";
 
 interface OnboardingDialogProps {
 	open: boolean;
@@ -63,10 +63,8 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
 			setStep("email");
 		} catch (error: any) {
-			toast({
-				title: "Error",
+			toast.error("Error", {
 				description: error.message,
-				variant: "destructive",
 			});
 		} finally {
 			setLoading(false);
@@ -102,10 +100,8 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
 			setStep("complete");
 		} catch (error: any) {
-			toast({
-				title: "Error",
+			toast.error("Error", {
 				description: error.message,
-				variant: "destructive",
 			});
 		} finally {
 			setLoading(false);
