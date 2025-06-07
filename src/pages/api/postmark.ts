@@ -1,5 +1,9 @@
 import type { APIRoute } from "astro";
 import { supabase } from "../../lib/supabase";
+import {
+	createSupabaseAdmin,
+	handleDatabaseError,
+} from "../../lib/supabase-admin";
 import { generateObject } from "ai";
 import {
 	createGoogleGenerativeAI,
@@ -17,13 +21,18 @@ const debtSchema = z.object({
 	isDebtCollection: z
 		.boolean()
 		.describe("Whether this appears to be a debt collection notice"),
+	successfullyParsed: z
+		.boolean()
+		.describe("Whether the debt information was successfully parsed"),
 });
 
 // Function to parse debt information using AI
 async function parseDebtWithAI(emailText: string, fromEmail: string) {
 	try {
 		// Check if Google API key is available
-		const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		const googleApiKey =
+			process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+			import.meta.env.GOOGLE_GENERATIVE_AI_API_KEY;
 		if (!googleApiKey) {
 			console.warn(
 				"Google API key not configured, falling back to regex parsing"
@@ -57,18 +66,42 @@ async function parseDebtWithAI(emailText: string, fromEmail: string) {
 			vendor: fromEmail || "unknown",
 			description: "Failed to parse with AI - using regex fallback",
 			isDebtCollection: amountMatch ? true : false,
+			successfullyParsed: false,
 		};
 	}
 }
 
 export const POST: APIRoute = async ({ request }) => {
 	try {
+		// Create service role client for webhook operations (bypasses RLS)
+		let supabaseAdmin;
+		try {
+			supabaseAdmin = createSupabaseAdmin();
+		} catch (configError) {
+			console.error("Supabase admin configuration error:", configError);
+			return new Response(
+				JSON.stringify({ error: "Server configuration error" }),
+				{
+					status: 500,
+					headers: { "Content-Type": "application/json" },
+				}
+			);
+		}
+
 		const data = await request.json();
+
+		// Validate essential webhook data
+		if (!data.TextBody && !data.HtmlBody) {
+			return new Response(JSON.stringify({ error: "No email content found" }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
+		}
 
 		// Check for opt-out keywords
 		const optOutKeywords = ["STOP", "UNSUBSCRIBE", "OPT-OUT", "REMOVE"];
-		const textBody = data.TextBody || "";
-		const fromEmail = data.FromFull?.Email || "unknown";
+		const textBody = data.TextBody || data.HtmlBody || "";
+		const fromEmail = data.FromFull?.Email || data.From || "unknown";
 
 		const hasOptOut = optOutKeywords.some((keyword) =>
 			textBody.toUpperCase().includes(keyword)
@@ -76,7 +109,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 		if (hasOptOut) {
 			// Log opt-out and don't process further
-			const { error } = await supabase.from("debts").insert({
+			const { error } = await supabaseAdmin.from("debts").insert({
 				vendor: fromEmail,
 				amount: 0,
 				raw_email: textBody,
@@ -85,7 +118,8 @@ export const POST: APIRoute = async ({ request }) => {
 
 			if (error) {
 				console.error("Error logging opt-out:", error);
-				return new Response(JSON.stringify({ error: error.message }), {
+				const errorInfo = handleDatabaseError(error);
+				return new Response(JSON.stringify({ error: errorInfo.message }), {
 					status: 500,
 					headers: { "Content-Type": "application/json" },
 				});
@@ -97,8 +131,19 @@ export const POST: APIRoute = async ({ request }) => {
 		// Parse debt information using AI
 		const debtInfo = await parseDebtWithAI(textBody, fromEmail);
 
+		if (!debtInfo || !debtInfo.successfullyParsed) {
+			console.warn("Failed to parse debt information");
+			return new Response(
+				JSON.stringify({ error: "Failed to parse debt information" }),
+				{
+					status: 400,
+					headers: { "Content-Type": "application/json" },
+				}
+			);
+		}
+
 		// Insert debt record with AI-extracted information
-		const { data: insertedDebt, error: insertError } = await supabase
+		const { data: insertedDebt, error: insertError } = await supabaseAdmin
 			.from("debts")
 			.insert({
 				vendor: debtInfo.vendor,
@@ -118,14 +163,22 @@ export const POST: APIRoute = async ({ request }) => {
 
 		if (insertError) {
 			console.error("Error inserting debt:", insertError);
-			return new Response(JSON.stringify({ error: insertError.message }), {
-				status: 500,
-				headers: { "Content-Type": "application/json" },
-			});
+			const errorInfo = handleDatabaseError(insertError);
+
+			return new Response(
+				JSON.stringify({
+					error: errorInfo.message,
+					details: errorInfo.originalError,
+				}),
+				{
+					status: 500,
+					headers: { "Content-Type": "application/json" },
+				}
+			);
 		}
 
 		// Log the email receipt
-		await supabase.from("audit_logs").insert({
+		await supabaseAdmin.from("audit_logs").insert({
 			debt_id: insertedDebt.id,
 			action: "email_received",
 			details: {
@@ -139,8 +192,11 @@ export const POST: APIRoute = async ({ request }) => {
 		// Trigger negotiation function if this is a legitimate debt
 		if (debtInfo.amount > 0 && debtInfo.isDebtCollection) {
 			// Access environment variables through Astro runtime
-			const supabaseUrl = process.env.SUPABASE_URL;
-			const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+			const supabaseUrl =
+				process.env.SUPABASE_URL || import.meta.env.PUBLIC_SUPABASE_URL;
+			const supabaseAnonKey =
+				process.env.SUPABASE_ANON_KEY ||
+				import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
 			if (supabaseUrl && supabaseAnonKey) {
 				const negotiateUrl = `${supabaseUrl}/functions/v1/negotiate`;
