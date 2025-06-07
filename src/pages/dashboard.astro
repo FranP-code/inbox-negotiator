@@ -2,14 +2,14 @@
 import '@/styles/globals.css'
 import Layout from '../layouts/Layout.astro';
 import { Dashboard } from '../components/Dashboard';
-import { ProtectedRoute } from '../components/ProtectedRoute';
+import { AuthGuard } from '../components/AuthGuard';
 import { Navbar } from '../components/Navbar';
 ---
 
 <Layout title="Dashboard - InboxNegotiator">
   <Navbar client:load />
   
-  <ProtectedRoute client:load>
+  <AuthGuard requireAuth={true} client:load>
     <Dashboard client:load />
-  </ProtectedRoute>
+  </AuthGuard>
 </Layout>
