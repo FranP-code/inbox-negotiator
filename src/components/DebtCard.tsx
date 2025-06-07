@@ -27,8 +27,8 @@ import {
 	TrendingUp,
 	Edit3,
 } from "lucide-react";
-import { supabase } from "../lib/supabase";
-import type { Debt } from "../lib/supabase";
+import { supabase, type Debt, type DebtVariable } from "../lib/supabase";
+import { toast } from "../hooks/use-toast";
 
 interface DebtCardProps {
 	debt: Debt;
@@ -110,22 +110,82 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 		const [body, setBody] = useState("");
 		const [variables, setVariables] = useState<Record<string, string>>({});
 
+		// Load variables from database
+		const loadVariables = async () => {
+			try {
+				const { data: dbVariables, error } = await supabase
+					.from("debt_variables")
+					.select("variable_name, variable_value")
+					.eq("debt_id", debt.id);
+
+				if (error) throw error;
+
+				const loadedVariables: Record<string, string> = {};
+				dbVariables?.forEach((dbVar) => {
+					loadedVariables[dbVar.variable_name] = dbVar.variable_value || "";
+				});
+
+				return loadedVariables;
+			} catch (error) {
+				console.error("Error loading variables:", error);
+				return {};
+			}
+		};
+
+		// Save variables to database
+		const saveVariables = async (variablesToSave: Record<string, string>) => {
+			try {
+				// First, delete existing variables for this debt
+				await supabase.from("debt_variables").delete().eq("debt_id", debt.id);
+
+				// Then insert new variables
+				const variableRecords = Object.entries(variablesToSave).map(
+					([name, value]) => ({
+						debt_id: debt.id,
+						variable_name: name,
+						variable_value: value,
+					})
+				);
+
+				if (variableRecords.length > 0) {
+					const { error } = await supabase
+						.from("debt_variables")
+						.insert(variableRecords);
+
+					if (error) throw error;
+				}
+			} catch (error) {
+				console.error("Error saving variables:", error);
+				throw error;
+			}
+		};
+
 		// Initialize data when dialog opens
 		useEffect(() => {
-			if (debt.metadata?.aiEmail) {
-				const aiEmail = debt.metadata.aiEmail;
-				setSubject(aiEmail.subject || "");
-				setBody(aiEmail.body || "");
+			const initializeData = async () => {
+				if (debt.metadata?.aiEmail) {
+					const aiEmail = debt.metadata.aiEmail;
+					setSubject(aiEmail.subject || "");
+					setBody(aiEmail.body || "");
 
-				// Extract variables from both subject and body
-				const allText = `${aiEmail.subject || ""} ${aiEmail.body || ""}`;
-				const extractedVars = extractVariables(allText);
-				const initialVariables: Record<string, string> = {};
-				extractedVars.forEach((variable) => {
-					initialVariables[variable] = "";
-				});
-				setVariables(initialVariables);
-			}
+					// Extract variables from both subject and body
+					const allText = `${aiEmail.subject || ""} ${aiEmail.body || ""}`;
+					const extractedVars = extractVariables(allText);
+
+					// Load saved variables from database
+					const savedVariables = await loadVariables();
+
+					// Merge extracted variables with saved values
+					const initialVariables: Record<string, string> = {};
+					extractedVars.forEach((variable) => {
+						initialVariables[variable] = savedVariables[variable] || "";
+					});
+
+					setVariables(initialVariables);
+				}
+			};
+
+			initializeData();
 		}, [debt.metadata?.aiEmail]);
 
 		// Update variables when body changes
@@ -223,10 +283,23 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 					.eq("id", debt.id);
 
 				if (error) {
-					console.error("Error saving changes:", error);
-					// You could add toast notification here
+					console.error("Error saving debt metadata:", error);
+					toast({
+						title: "Error",
+						description: "Failed to save email changes. Please try again.",
+						variant: "destructive",
+					});
 					return;
 				}
+
+				// Save variables to database
+				await saveVariables(variables);
+
+				toast({
+					title: "Changes saved",
+					description:
+						"Your email and variables have been updated successfully.",
+				});
 
 				// Call onUpdate callback to refresh the parent component
 				if (onUpdate) {
@@ -236,6 +309,11 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 				setIsEditing(false);
 			} catch (error) {
 				console.error("Error saving changes:", error);
+				toast({
+					title: "Error",
+					description: "Failed to save changes. Please try again.",
+					variant: "destructive",
+				});
 			} finally {
 				setIsSaving(false);
 			}

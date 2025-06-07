@@ -1,10 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error("Missing Supabase environment variables");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -22,7 +22,7 @@ export type Debt = {
   vendor: string;
   amount: number;
   raw_email: string | null;
-  status: 'received' | 'negotiating' | 'settled' | 'failed' | 'opted_out';
+  status: "received" | "negotiating" | "settled" | "failed" | "opted_out";
   negotiated_plan: string | null;
   projected_savings: number;
   user_id: string;
@@ -64,6 +64,15 @@ export type EmailProcessingUsage = {
   user_id: string;
   month_year: string;
   emails_processed: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DebtVariable = {
+  id: string;
+  debt_id: string;
+  variable_name: string;
+  variable_value: string | null;
   created_at: string;
   updated_at: string;
 };
