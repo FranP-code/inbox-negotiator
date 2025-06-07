@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { BarChart3, LogOut, User as UserIcon } from 'lucide-react';
+import { ModeToggle } from './ModeToggle';
 
 export function Navbar() {
   const [user, setUser] = useState<User | null>(null);
@@ -39,21 +40,22 @@ export function Navbar() {
   };
 
   return (
-    <nav className="border-b bg-white">
+    <nav className="border-b bg-white dark:bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
             <BarChart3 className="h-8 w-8 text-primary" />
-            <a href="/" className="text-xl font-bold text-gray-900">
+            <a href="/" className="text-xl font-bold text-gray-900 dark:text-foreground">
               InboxNegotiator
             </a>
           </div>
 
           <div className="flex items-center gap-4">
+            <ModeToggle />
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost\" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="text-xs">
                         {getInitials(user.email || '')}
