@@ -1,9 +1,137 @@
 ---
 import '@/styles/globals.css'
 import Layout from '../layouts/Layout.astro';
-import { Dashboard } from '../components/Dashboard';
+import { Navbar } from '../components/Navbar';
 ---
 
 <Layout title="InboxNegotiator - AI-Powered Debt Resolution">
-	<Dashboard client:load />
+  <Navbar client:load />
+  
+  <main class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <!-- Hero Section -->
+    <section class="relative overflow-hidden">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
+        <div class="text-center">
+          <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+            AI-Powered
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
+              Debt Resolution
+            </span>
+          </h1>
+          <p class="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+            Forward your debt emails and let our AI negotiate FDCPA-compliant payment plans automatically. 
+            Save time, reduce stress, and potentially save thousands on your debts.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <a href="/signup" class="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+              Get Started Free
+            </a>
+            <a href="#how-it-works" class="inline-flex items-center justify-center px-8 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+              Learn More
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="how-it-works" class="py-16 bg-white">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-gray-900 mb-4">How It Works</h2>
+          <p class="text-lg text-gray-600">Simple, automated, and compliant debt resolution</p>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">Forward Emails</h3>
+            <p class="text-gray-600">Simply forward your debt collection emails to our secure processing address.</p>
+          </div>
+          
+          <div class="text-center">
+            <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">AI Analysis</h3>
+            <p class="text-gray-600">Our AI analyzes the debt and generates FDCPA-compliant negotiation strategies.</p>
+          </div>
+          
+          <div class="text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">Track Progress</h3>
+            <p class="text-gray-600">Monitor negotiations in real-time and track your potential savings.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Benefits Section -->
+    <section class="py-16 bg-gray-50">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl font-bold text-gray-900 mb-4">Why Choose InboxNegotiator?</h2>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">FDCPA Compliant</h3>
+            <p class="text-gray-600">All responses follow Fair Debt Collection Practices Act guidelines.</p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Save Money</h3>
+            <p class="text-gray-600">Potentially reduce your debt by up to 40% through strategic negotiations.</p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Real-time Updates</h3>
+            <p class="text-gray-600">Track your negotiations with live dashboard updates.</p>
+          </div>
+          
+          <div class="bg-white p-6 rounded-lg shadow-sm">
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Secure & Private</h3>
+            <p class="text-gray-600">Your financial information is encrypted and protected.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-16 bg-blue-600">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 class="text-3xl font-bold text-white mb-4">Ready to Take Control of Your Debt?</h2>
+        <p class="text-xl text-blue-100 mb-8">Join thousands who have successfully negotiated their debts with AI assistance.</p>
+        <a href="/signup" class="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-blue-600 bg-white hover:bg-gray-50 transition-colors">
+          Start Your Free Account
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-white py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center">
+        <div class="flex items-center justify-center gap-3 mb-4">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+          </svg>
+          <span class="text-xl font-bold">InboxNegotiator</span>
+        </div>
+        <p class="text-gray-400 mb-4">AI-powered debt resolution platform</p>
+        <p class="text-sm text-gray-500">© 2025 InboxNegotiator. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
 </Layout>

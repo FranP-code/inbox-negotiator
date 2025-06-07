@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, type Debt } from '../lib/supabase';
+import { Button } from '@/components/ui/button';
 import { DebtCard } from './DebtCard';
 import { DebtTimeline } from './DebtTimeline';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,8 @@ import {
   CheckCircle, 
   AlertTriangle,
   RefreshCw,
-  BarChart3
+  BarChart3,
+  LogOut
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -96,6 +98,11 @@ export function Dashboard() {
     });
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -125,14 +132,16 @@ export function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            InboxNegotiator Dashboard
-          </h1>
-          <p className="text-gray-600 mt-2">
-            AI-powered debt resolution platform with real-time updates
-          </p>
+        <div className="mb-8 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <BarChart3 className="h-8 w-8 text-primary" />
+              InboxNegotiator Dashboard
+            </h1>
+            <p className="text-gray-600 mt-2">
+              AI-powered debt resolution platform with real-time updates
+            </p>
+          </div>
         </div>
 
         {/* Stats Cards */}
