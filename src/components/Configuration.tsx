@@ -29,6 +29,7 @@ import {
 	TrendingUp,
 	Infinity,
 	AlertCircle,
+	UserCheck,
 } from "lucide-react";
 import { toast } from "../hooks/use-toast";
 
@@ -41,6 +42,18 @@ export function Configuration() {
 	const [loading, setLoading] = useState(true);
 	const [newEmail, setNewEmail] = useState("");
 	const [addingEmail, setAddingEmail] = useState(false);
+
+	// Personal data state
+	const [personalData, setPersonalData] = useState({
+		full_name: "",
+		address_line_1: "",
+		address_line_2: "",
+		city: "",
+		state: "",
+		zip_code: "",
+		phone_number: "",
+	});
+	const [savingPersonalData, setSavingPersonalData] = useState(false);
 
 	useEffect(() => {
 		fetchUserData();
@@ -58,6 +71,13 @@ export function Configuration() {
 				.from("user_profiles")
 				.select("*")
 				.eq("user_id", user.id)
+				.single();
+
+			// Fetch user personal data
+			const { data: userData } = await supabase
+				.from("users")
+				.select("*")
+				.eq("id", user.id)
 				.single();
 
 			// Fetch additional emails
@@ -79,10 +99,61 @@ export function Configuration() {
 			setProfile(profileData);
 			setAdditionalEmails(emailsData || []);
 			setUsage(usageData);
+
+			// Set personal data
+			if (userData) {
+				setPersonalData({
+					full_name: userData.full_name || "",
+					address_line_1: userData.address_line_1 || "",
+					address_line_2: userData.address_line_2 || "",
+					city: userData.city || "",
+					state: userData.state || "",
+					zip_code: userData.zip_code || "",
+					phone_number: userData.phone_number || "",
+				});
+			}
 		} catch (error) {
 			console.error("Error fetching user data:", error);
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const savePersonalData = async () => {
+		setSavingPersonalData(true);
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
+			const { error } = await supabase
+				.from("users")
+				.update({
+					full_name: personalData.full_name || null,
+					address_line_1: personalData.address_line_1 || null,
+					address_line_2: personalData.address_line_2 || null,
+					city: personalData.city || null,
+					state: personalData.state || null,
+					zip_code: personalData.zip_code || null,
+					phone_number: personalData.phone_number || null,
+				})
+				.eq("id", user.id);
+
+			if (error) throw error;
+
+			toast({
+				title: "Personal data updated",
+				description: "Your personal information has been saved successfully.",
+			});
+		} catch (error: any) {
+			toast({
+				title: "Error saving personal data",
+				description: error.message,
+				variant: "destructive",
+			});
+		} finally {
+			setSavingPersonalData(false);
 		}
 	};
 
@@ -244,6 +315,139 @@ export function Configuration() {
 									</AlertDescription>
 								</Alert>
 							)}
+						</CardContent>
+					</Card>
+
+					{/* Personal Data */}
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<UserCheck className="h-5 w-5" />
+								Personal Information
+							</CardTitle>
+							<CardDescription>
+								Your personal information used in negotiation letters
+							</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="grid grid-cols-1 gap-4">
+								<div className="space-y-2">
+									<Label htmlFor="config_full_name">Full Name</Label>
+									<Input
+										id="config_full_name"
+										placeholder="John Doe"
+										value={personalData.full_name}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												full_name: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="config_address_line_1">Address Line 1</Label>
+									<Input
+										id="config_address_line_1"
+										placeholder="123 Main Street"
+										value={personalData.address_line_1}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												address_line_1: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="config_address_line_2">Address Line 2</Label>
+									<Input
+										id="config_address_line_2"
+										placeholder="Apt 4B"
+										value={personalData.address_line_2}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												address_line_2: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="grid grid-cols-2 gap-2">
+									<div className="space-y-2">
+										<Label htmlFor="config_city">City</Label>
+										<Input
+											id="config_city"
+											placeholder="New York"
+											value={personalData.city}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													city: e.target.value,
+												})
+											}
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="config_state">State</Label>
+										<Input
+											id="config_state"
+											placeholder="NY"
+											value={personalData.state}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													state: e.target.value,
+												})
+											}
+										/>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-2 gap-2">
+									<div className="space-y-2">
+										<Label htmlFor="config_zip_code">Zip Code</Label>
+										<Input
+											id="config_zip_code"
+											placeholder="10001"
+											value={personalData.zip_code}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													zip_code: e.target.value,
+												})
+											}
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="config_phone_number">Phone Number</Label>
+										<Input
+											id="config_phone_number"
+											placeholder="(555) 123-4567"
+											value={personalData.phone_number}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													phone_number: e.target.value,
+												})
+											}
+										/>
+									</div>
+								</div>
+							</div>
+
+							<div className="flex justify-end">
+								<Button
+									onClick={savePersonalData}
+									disabled={savingPersonalData}
+									className="min-w-[120px]"
+								>
+									{savingPersonalData ? "Saving..." : "Save Changes"}
+								</Button>
+							</div>
 						</CardContent>
 					</Card>
 

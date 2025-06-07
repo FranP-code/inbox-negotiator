@@ -20,13 +20,61 @@ interface OnboardingDialogProps {
 }
 
 export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
-	const [step, setStep] = useState<"welcome" | "email" | "complete">("welcome");
+	const [step, setStep] = useState<
+		"welcome" | "personal" | "email" | "complete"
+	>("welcome");
 	const [email, setEmail] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [skipEmail, setSkipEmail] = useState(false);
 
-	const handleAddEmail = async () => {
-		if (!email && !skipEmail) return;
+	// Personal data state
+	const [personalData, setPersonalData] = useState({
+		full_name: "",
+		address_line_1: "",
+		address_line_2: "",
+		city: "",
+		state: "",
+		zip_code: "",
+		phone_number: "",
+	});
+
+	const handleSavePersonalData = async () => {
+		setLoading(true);
+		try {
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+			if (!user) return;
+
+			const { error } = await supabase
+				.from("users")
+				.update({
+					full_name: personalData.full_name || null,
+					address_line_1: personalData.address_line_1 || null,
+					address_line_2: personalData.address_line_2 || null,
+					city: personalData.city || null,
+					state: personalData.state || null,
+					zip_code: personalData.zip_code || null,
+					phone_number: personalData.phone_number || null,
+				})
+				.eq("id", user.id);
+
+			if (error) throw error;
+
+			setStep("email");
+		} catch (error: any) {
+			toast({
+				title: "Error",
+				description: error.message,
+				variant: "destructive",
+			});
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleAddEmail = async (_skipEmail?: boolean) => {
+		if (!email && !_skipEmail) return;
 
 		setLoading(true);
 		try {
@@ -35,7 +83,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 			} = await supabase.auth.getUser();
 			if (!user) return;
 
-			if (email && !skipEmail) {
+			if (email && !_skipEmail) {
 				const { error } = await supabase.from("additional_emails").insert({
 					user_id: user.id,
 					email_address: email.trim().toLowerCase(),
@@ -70,6 +118,7 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 
 	const handleSkipEmail = () => {
 		setSkipEmail(true);
+		handleAddEmail(true);
 	};
 
 	return (
@@ -110,9 +159,156 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 							</div> */}
 
 							<div className="flex justify-end">
-								<Button onClick={() => setStep("email")}>
+								<Button onClick={() => setStep("personal")}>
 									Get Started
 									<ArrowRight className="h-4 w-4 ml-2" />
+								</Button>
+							</div>
+						</div>
+					</>
+				)}
+
+				{step === "personal" && (
+					<>
+						<DialogHeader>
+							<DialogTitle className="flex items-center gap-2">
+								<UserCheck className="h-6 w-6 text-primary" />
+								Personal Information
+							</DialogTitle>
+						</DialogHeader>
+						<DialogDescription>
+							Please provide your personal information. This will be used to
+							generate formal negotiation letters.
+						</DialogDescription>
+						<DialogDescription className="text-sm text-muted-foreground">
+							All fields are optional, but providing complete information will
+							result in more professional letters.
+						</DialogDescription>
+
+						<div className="space-y-4 overflow-y-auto">
+							<div className="grid grid-cols-1 gap-4">
+								<div className="space-y-2">
+									<Label htmlFor="full_name">Full Name</Label>
+									<Input
+										id="full_name"
+										placeholder="John Doe"
+										value={personalData.full_name}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												full_name: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="address_line_1">Address Line 1</Label>
+									<Input
+										id="address_line_1"
+										placeholder="123 Main Street"
+										value={personalData.address_line_1}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												address_line_1: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="address_line_2">Address Line 2</Label>
+									<Input
+										id="address_line_2"
+										placeholder="Apt 4B"
+										value={personalData.address_line_2}
+										onChange={(e) =>
+											setPersonalData({
+												...personalData,
+												address_line_2: e.target.value,
+											})
+										}
+									/>
+								</div>
+
+								<div className="grid grid-cols-2 gap-2">
+									<div className="space-y-2">
+										<Label htmlFor="city">City</Label>
+										<Input
+											id="city"
+											placeholder="New York"
+											value={personalData.city}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													city: e.target.value,
+												})
+											}
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="state">State</Label>
+										<Input
+											id="state"
+											placeholder="NY"
+											value={personalData.state}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													state: e.target.value,
+												})
+											}
+										/>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-2 gap-2">
+									<div className="space-y-2">
+										<Label htmlFor="zip_code">Zip Code</Label>
+										<Input
+											id="zip_code"
+											placeholder="10001"
+											value={personalData.zip_code}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													zip_code: e.target.value,
+												})
+											}
+										/>
+									</div>
+									<div className="space-y-2">
+										<Label htmlFor="phone_number">Phone Number</Label>
+										<Input
+											id="phone_number"
+											placeholder="(555) 123-4567"
+											value={personalData.phone_number}
+											onChange={(e) =>
+												setPersonalData({
+													...personalData,
+													phone_number: e.target.value,
+												})
+											}
+										/>
+									</div>
+								</div>
+							</div>
+
+							<div className="flex gap-2 justify-end">
+								<Button
+									variant="outline"
+									onClick={() => setStep("email")}
+									disabled={loading}
+								>
+									Skip for now
+								</Button>
+								<Button
+									onClick={handleSavePersonalData}
+									disabled={loading}
+									className="min-w-[100px]"
+								>
+									{loading ? "Saving..." : "Continue"}
 								</Button>
 							</div>
 						</div>
@@ -176,11 +372,11 @@ export function OnboardingDialog({ open, onComplete }: OnboardingDialogProps) {
 									Skip for now
 								</Button>
 								<Button
-									onClick={handleAddEmail}
+									onClick={() => handleAddEmail()}
 									disabled={!email || loading}
 									className="min-w-[100px]"
 								>
-									{loading ? "Adding..." : "Add Email"}
+									{loading && email ? "Adding..." : "Add Email"}
 								</Button>
 							</div>
 						</div>
