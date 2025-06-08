@@ -259,14 +259,16 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 		return (
 			<Dialog>
 				<DialogTrigger asChild>
-					<Button variant="outline" size="sm" className="flex-1">
-						{isReadOnly ? (
-							<Eye className="h-4 w-4 mr-2" />
-						) : (
-							<Edit3 className="h-4 w-4 mr-2" />
-						)}
-						{isReadOnly ? "See Response" : "Edit Response"}
-					</Button>
+					{debt.status !== "requires_manual_review" && (
+						<Button variant="outline" size="sm" className="flex-1">
+							{isReadOnly ? (
+								<Eye className="h-4 w-4 mr-2" />
+							) : (
+								<Edit3 className="h-4 w-4 mr-2" />
+							)}
+							{isReadOnly ? "See Response" : "Edit Response"}
+						</Button>
+					)}
 				</DialogTrigger>
 				<DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
 					<DialogHeader>
