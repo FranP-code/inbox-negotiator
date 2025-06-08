@@ -162,6 +162,7 @@ export function Dashboard() {
 				"approved",
 				"awaiting_response",
 				"counter_negotiating",
+				"requires_manual_review",
 			].includes(debt.status)
 		),
 		settled: debts.filter((debt) =>
@@ -309,7 +310,7 @@ export function Dashboard() {
 									</CardContent>
 								</Card>
 							) : (
-								<div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+								<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 									{debtList.map((debt) => (
 										<div key={debt.id} className="space-y-4">
 											<DebtCard debt={debt} onUpdate={fetchDebts} />

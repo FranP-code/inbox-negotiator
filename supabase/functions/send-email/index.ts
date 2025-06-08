@@ -3,6 +3,7 @@
 
   This function sends negotiated emails via Postmark:
   - Validates user has server token configured
+  - Processes email variables and replaces placeholders
   - Sends the approved negotiation email to the debt collector
   - Updates debt status and logs the action
   - Ensures FDCPA compliance
@@ -79,6 +80,100 @@ async function sendEmailViaPostmark(
   }
 
   return await response.json();
+}
+
+// Extract variables from text in {{ variable }} format
+function extractVariables(text: string): string[] {
+  const variableRegex = /\{\{\s*([^}]+)\s*\}\}/g;
+  const matches: string[] = [];
+  let match;
+  while ((match = variableRegex.exec(text)) !== null) {
+    if (!matches.includes(match[1].trim())) {
+      matches.push(match[1].trim());
+    }
+  }
+  return matches;
+}
+
+// Replace variables in text with their values
+function replaceVariables(
+  text: string,
+  variables: Record<string, string>,
+): string {
+  let result = text;
+  Object.entries(variables).forEach(([key, value]) => {
+    const regex = new RegExp(
+      `\\{\\{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`,
+      "g",
+    );
+    result = result.replace(regex, value);
+  });
+  return result;
+}
+
+// Load variables from database for a specific debt
+async function loadVariablesFromDatabase(
+  supabaseClient: any,
+  debtId: string,
+): Promise<Record<string, string>> {
+  try {
+    const { data: dbVariables, error } = await supabaseClient
+      .from("debt_variables")
+      .select("variable_name, variable_value")
+      .eq("debt_id", debtId);
+
+    if (error) throw error;
+
+    const loadedVariables: Record<string, string> = {};
+    dbVariables?.forEach((dbVar: any) => {
+      loadedVariables[dbVar.variable_name] = dbVar.variable_value || "";
+    });
+
+    return loadedVariables;
+  } catch (error) {
+    console.error("Error loading variables:", error);
+    return {};
+  }
+}
+
+// Process email template by replacing variables with their values
+async function processEmailTemplate(
+  supabaseClient: any,
+  debtId: string,
+  subject: string,
+  body: string,
+): Promise<
+  {
+    processedSubject: string;
+    processedBody: string;
+    hasUnfilledVariables: boolean;
+  }
+> {
+  // Extract all variables from subject and body
+  const allText = `${subject} ${body}`;
+  const extractedVars = extractVariables(allText);
+
+  // Load saved variables from database
+  const savedVariables = await loadVariablesFromDatabase(
+    supabaseClient,
+    debtId,
+  );
+
+  // Check if all variables have values
+  const unfilledVariables = extractedVars.filter((variable) =>
+    !savedVariables[variable] || savedVariables[variable].trim() === ""
+  );
+  const hasUnfilledVariables = unfilledVariables.length > 0;
+
+  // Replace variables in subject and body
+  const processedSubject = replaceVariables(subject, savedVariables);
+  const processedBody = replaceVariables(body, savedVariables);
+
+  return {
+    processedSubject,
+    processedBody,
+    hasUnfilledVariables,
+  };
 }
 
 // Extract email address from various formats
@@ -209,8 +304,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract email details
-    const { subject, body } = debt.metadata.aiEmail;
+    // Extract email details and process variables
+    const { subject: rawSubject, body: rawBody } = debt.metadata.aiEmail;
     const fromEmail = debt.metadata?.toEmail || user.email;
 
     if (!fromEmail) {
@@ -222,6 +317,33 @@ Deno.serve(async (req) => {
         },
       );
     }
+
+    // Process email template and replace variables
+    const { processedSubject, processedBody, hasUnfilledVariables } =
+      await processEmailTemplate(
+        supabaseClient,
+        debtId,
+        rawSubject,
+        rawBody,
+      );
+
+    // Check if there are unfilled variables
+    if (hasUnfilledVariables) {
+      return new Response(
+        JSON.stringify({
+          error: "Email contains unfilled variables",
+          details:
+            "Please fill in all required variables before sending the email.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const subject = processedSubject;
+    const body = processedBody;
 
     // Determine recipient email
     let toEmail = debt.vendor;

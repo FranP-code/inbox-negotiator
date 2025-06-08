@@ -48,6 +48,7 @@ const messageTypeLabels = {
 	counter_offer: "Counter Offer",
 	acceptance: "Offer Accepted",
 	rejection: "Offer Rejected",
+	manual_response: "Manual Response",
 };
 
 const statusColors = {
@@ -57,6 +58,7 @@ const statusColors = {
 	sent: "text-orange-600 dark:text-orange-400",
 	awaiting_response: "text-blue-600 dark:text-blue-400",
 	counter_negotiating: "text-yellow-600 dark:text-yellow-400",
+	requires_manual_review: "text-amber-600 dark:text-amber-400",
 	accepted: "text-green-600 dark:text-green-400",
 	rejected: "text-red-600 dark:text-red-400",
 	settled: "text-green-600 dark:text-green-400",
@@ -71,6 +73,7 @@ const statusLabels = {
 	sent: "Sent",
 	awaiting_response: "Awaiting Response",
 	counter_negotiating: "Counter Negotiating",
+	requires_manual_review: "Manual Review Required",
 	accepted: "Accepted",
 	rejected: "Rejected",
 	settled: "Settled",
@@ -384,7 +387,9 @@ export function ConversationTimeline({
 													?.proposedAmount && (
 													<div className="text-xs text-gray-600 dark:text-gray-400">
 														Proposed Amount: $
-														{message.ai_analysis.extractedTerms.proposedAmount}
+														{formatCurrency(
+															message.ai_analysis.extractedTerms.proposedAmount
+														)}
 													</div>
 												)}
 

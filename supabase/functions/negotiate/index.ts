@@ -73,13 +73,42 @@ interface DebtRecord {
     isDebtCollection?: boolean;
     subject?: string;
     fromEmail?: string;
+    toEmail?: string;
+    aiEmail?: {
+      subject: string;
+      body: string;
+      strategy: string;
+      confidence: number;
+      reasoning: string;
+      customTerms: Record<string, unknown>;
+    };
+    lastResponse?: {
+      analysis: Record<string, unknown>;
+      receivedAt: string;
+      fromEmail: string;
+      subject: string;
+    };
   };
+}
+
+interface CounterOfferContext {
+  previousResponse: string;
+  extractedTerms: {
+    proposedAmount?: number;
+    proposedPaymentPlan?: string;
+    monthlyAmount?: number;
+    numberOfPayments?: number;
+    totalAmount?: number;
+    paymentFrequency?: string;
+  };
+  sentiment: string;
 }
 
 // AI-powered negotiation email generator
 async function generateNegotiationEmail(
   record: DebtRecord,
   personalData: PersonalData,
+  counterOfferContext?: CounterOfferContext,
 ) {
   try {
     const googleApiKey = Deno.env.get("GOOGLE_GENERATIVE_AI_API_KEY");
@@ -88,12 +117,9 @@ async function generateNegotiationEmail(
       return generateFallbackEmail(record, personalData);
     }
 
-    const result = await generateObject({
-      model: createGoogleGenerativeAI({
-        apiKey: googleApiKey,
-      })("gemini-2.5-flash-preview-04-17"),
-      system:
-        `You are an expert debt negotiation advisor specializing in FDCPA-compliant email generation.
+    // Build context-aware system prompt
+    let systemPrompt =
+      `You are an expert debt negotiation advisor specializing in FDCPA-compliant email generation.
       Create professional, formal negotiation emails that:
       - Include appropriate subject line and email body
       - Follow Fair Debt Collection Practices Act requirements
@@ -102,34 +128,69 @@ async function generateNegotiationEmail(
       - Use {{ variable }} syntax for missing or uncertain data (like account numbers, specific dates)
       - Maintain professional tone throughout
       - Include proper business letter formatting
-      
+
       Strategy guidelines based on amount:
       - Extension: For temporary hardship, usually < $500
-      - Installment: For manageable monthly payments, $500-$2000  
+      - Installment: For manageable monthly payments, $500-$2000
       - Settlement: For significant savings, typically $2000+
       - Dispute: If debt validity is questionable
-      
+
       For missing personal data, use appropriate placeholders.
-      For uncertain information like account numbers, use {{ Account Number }} format.`,
-      prompt: `Generate a complete negotiation email for this debt:
-      
+      For uncertain information like account numbers, use {{ Account Number }} format.`;
+
+    // Build context-aware prompt
+    let prompt = `Generate a complete negotiation email for this debt:
+
       Debt Amount: $${record.amount}
       Vendor: ${record.vendor}
       Description: ${record.description || "Not specified"}
       Due Date: ${record.due_date || "Not specified"}
       Email Content Preview: ${record.raw_email.substring(0, 500)}...
-      
+
       Personal Data Available:
       - Full Name: ${personalData.full_name || "{{ Full Name }}"}
       - Address: ${personalData.address_line_1 || "{{ Address Line 1 }}"} ${
-        personalData.address_line_2 ? personalData.address_line_2 : ""
-      }
+      personalData.address_line_2 ? personalData.address_line_2 : ""
+    }
       - City: ${personalData.city || "{{ City }}"}
       - State: ${personalData.state || "{{ State }}"}
       - Zip: ${personalData.zip_code || "{{ Zip Code }}"}
-      - Phone: ${personalData.phone_number || "{{ Phone Number }}"}
-      
-      Create a professional negotiation email with subject and body.`,
+      - Phone: ${personalData.phone_number || "{{ Phone Number }}"}`;
+
+    // Add counter-offer context if this is a response to a creditor's counter-offer
+    if (counterOfferContext) {
+      systemPrompt += `
+
+      IMPORTANT: This is a COUNTER-RESPONSE to a creditor's previous response. You must:
+      - Acknowledge their previous response professionally
+      - Address their specific terms or concerns
+      - Make a strategic counter-offer that moves toward resolution
+      - Show willingness to negotiate while protecting the debtor's interests
+      - Reference specific amounts or terms they mentioned
+      - Maintain momentum in the negotiation process`;
+
+      prompt += `
+
+      CREDITOR'S PREVIOUS RESPONSE CONTEXT:
+      - Their Response: ${counterOfferContext.previousResponse}
+      - Sentiment: ${counterOfferContext.sentiment}
+      - Extracted Terms: ${JSON.stringify(counterOfferContext.extractedTerms)}
+
+      Generate a strategic counter-response that acknowledges their position and makes a reasonable counter-offer.`;
+    } else {
+      prompt += `
+
+      Create a professional initial negotiation email with subject and body.`;
+    }
+
+    console.log({ systemPrompt, prompt });
+
+    const result = await generateObject({
+      model: createGoogleGenerativeAI({
+        apiKey: googleApiKey,
+      })("gemini-2.5-flash-preview-04-17"),
+      system: systemPrompt,
+      prompt: prompt,
       schema: negotiationEmailSchema,
     });
 
@@ -310,7 +371,10 @@ Deno.serve(async (req) => {
       );
 
       // For webhook calls, we'll get the userId from the request body along with the record
-      const { record }: { record: DebtRecord } = await req.json();
+      const { record, counterOfferContext }: {
+        record: DebtRecord;
+        counterOfferContext?: CounterOfferContext;
+      } = await req.json();
 
       if (!record || !record.user_id) {
         return new Response(
@@ -328,7 +392,12 @@ Deno.serve(async (req) => {
 
       // Use the record as-is for webhook calls
       const personalData = await fetchUserPersonalData(supabaseClient, user.id);
-      return await processNegotiation(supabaseClient, record, personalData);
+      return await processNegotiation(
+        supabaseClient,
+        record,
+        personalData,
+        counterOfferContext,
+      );
     } else {
       // This is an authenticated user call
       if (!authHeader) {
@@ -452,21 +521,43 @@ async function processNegotiation(
   supabaseClient: ReturnType<typeof createClient>,
   record: DebtRecord,
   personalData: PersonalData,
+  counterOfferContext?: CounterOfferContext,
 ): Promise<Response>;
 async function processNegotiation(
   supabaseClient: unknown,
   record: DebtRecord,
   personalData: PersonalData,
+  counterOfferContext?: CounterOfferContext,
 ): Promise<Response>;
 async function processNegotiation(
   supabaseClient: unknown,
   record: DebtRecord,
   personalData: PersonalData,
+  counterOfferContext?: CounterOfferContext,
 ): Promise<Response> {
   const client = supabaseClient as ReturnType<typeof createClient>;
 
   // Generate AI-powered negotiation email
-  const emailResult = await generateNegotiationEmail(record, personalData);
+  const emailResult = await generateNegotiationEmail(
+    record,
+    personalData,
+    counterOfferContext,
+  );
+
+  // Create conversation message for the AI-generated response
+  const messageType = counterOfferContext
+    ? "counter_offer"
+    : "negotiation_sent";
+  await client.from("conversation_messages").insert({
+    debt_id: record.id,
+    message_type: messageType,
+    direction: "outbound",
+    subject: emailResult.subject,
+    body: emailResult.body,
+    from_email: record.metadata?.toEmail || "user@example.com",
+    to_email: record.metadata?.fromEmail || record.vendor,
+    message_id: `ai-generated-${Date.now()}`,
+  });
 
   // Update debt record with AI-generated content - using provided client
   const { error: updateError } = await client
@@ -474,7 +565,7 @@ async function processNegotiation(
     .update({
       negotiated_plan: `Subject: ${emailResult.subject}\n\n${emailResult.body}`,
       projected_savings: emailResult.projectedSavings,
-      status: "negotiating",
+      status: counterOfferContext ? "counter_negotiating" : "negotiating",
       metadata: {
         ...record.metadata,
         aiEmail: {
@@ -498,13 +589,17 @@ async function processNegotiation(
     .from("audit_logs")
     .insert({
       debt_id: record.id,
-      action: "negotiation_generated",
+      action: counterOfferContext
+        ? "auto_counter_response_generated"
+        : "negotiation_generated",
       details: {
         strategy: emailResult.strategy,
         amount: record.amount,
         projected_savings: emailResult.projectedSavings,
         ai_confidence: emailResult.confidenceLevel,
         reasoning: emailResult.reasoning,
+        isCounterResponse: !!counterOfferContext,
+        counterOfferContext: counterOfferContext || null,
       },
     });
 

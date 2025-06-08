@@ -284,7 +284,7 @@ async function handleNegotiationResponse(
 		// Update status to require user review
 		await supabaseAdmin
 			.from("debts")
-			.update({ status: "awaiting_response" })
+			.update({ status: "requires_manual_review" })
 			.eq("id", debt.id);
 
 		return new Response(

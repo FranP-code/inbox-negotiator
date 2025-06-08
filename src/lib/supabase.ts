@@ -29,6 +29,7 @@ export type Debt = {
     | "sent"
     | "awaiting_response"
     | "counter_negotiating"
+    | "requires_manual_review"
     | "accepted"
     | "rejected"
     | "settled"
@@ -103,7 +104,8 @@ export type ConversationMessage = {
     | "response_received"
     | "counter_offer"
     | "acceptance"
-    | "rejection";
+    | "rejection"
+    | "manual_response";
   direction: "inbound" | "outbound";
   subject?: string;
   body: string;

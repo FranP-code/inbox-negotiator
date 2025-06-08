@@ -47,6 +47,13 @@ import {
 import { supabase, type Debt, type DebtVariable } from "../lib/supabase";
 import { toast } from "sonner";
 import { formatCurrency } from "../lib/utils";
+import {
+	replaceVariables,
+	saveVariablesToDatabase,
+	getVariablesForTemplate,
+	updateVariablesForTextChange,
+} from "../lib/emailVariables";
+import { ManualResponseDialog } from "./ManualResponseDialog";
 
 interface DebtCardProps {
 	debt: Debt;
@@ -65,6 +72,8 @@ const statusColors = {
 		"bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
 	counter_negotiating:
 		"bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800",
+	requires_manual_review:
+		"bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
 	accepted:
 		"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800",
 	rejected:
@@ -84,6 +93,7 @@ const statusLabels = {
 	sent: "Sent",
 	awaiting_response: "Awaiting Response",
 	counter_negotiating: "Counter Negotiating",
+	requires_manual_review: "Manual Review Required",
 	accepted: "Accepted",
 	rejected: "Rejected",
 	settled: "Settled",
@@ -119,35 +129,6 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 		});
 	};
 
-	// Extract variables from text in {{ variable }} format
-	const extractVariables = (text: string): string[] => {
-		const variableRegex = /\{\{\s*([^}]+)\s*\}\}/g;
-		const matches: string[] = [];
-		let match;
-		while ((match = variableRegex.exec(text)) !== null) {
-			if (!matches.includes(match[1].trim())) {
-				matches.push(match[1].trim());
-			}
-		}
-		return matches;
-	};
-
-	// Replace variables in text
-	const replaceVariables = (
-		text: string,
-		variables: Record<string, string>
-	): string => {
-		let result = text;
-		Object.entries(variables).forEach(([key, value]) => {
-			const regex = new RegExp(
-				`\\{\\{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`,
-				"g"
-			);
-			result = result.replace(regex, value);
-		});
-		return result;
-	};
-
 	const EditableResponseDialog = () => {
 		const [isEditing, setIsEditing] = useState(false);
 		const [isSaving, setIsSaving] = useState(false);
@@ -157,56 +138,6 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 
 		// Check if debt is in read-only state (approved or sent)
 
-		// Load variables from database
-		const loadVariables = async () => {
-			try {
-				const { data: dbVariables, error } = await supabase
-					.from("debt_variables")
-					.select("variable_name, variable_value")
-					.eq("debt_id", debt.id);
-
-				if (error) throw error;
-
-				const loadedVariables: Record<string, string> = {};
-				dbVariables?.forEach((dbVar) => {
-					loadedVariables[dbVar.variable_name] = dbVar.variable_value || "";
-				});
-
-				return loadedVariables;
-			} catch (error) {
-				console.error("Error loading variables:", error);
-				return {};
-			}
-		};
-
-		// Save variables to database
-		const saveVariables = async (variablesToSave: Record<string, string>) => {
-			try {
-				// First, delete existing variables for this debt
-				await supabase.from("debt_variables").delete().eq("debt_id", debt.id);
-
-				// Then insert new variables
-				const variableRecords = Object.entries(variablesToSave).map(
-					([name, value]) => ({
-						debt_id: debt.id,
-						variable_name: name,
-						variable_value: value,
-					})
-				);
-
-				if (variableRecords.length > 0) {
-					const { error } = await supabase
-						.from("debt_variables")
-						.insert(variableRecords);
-
-					if (error) throw error;
-				}
-			} catch (error) {
-				console.error("Error saving variables:", error);
-				throw error;
-			}
-		};
-
 		// Initialize data when dialog opens
 		useEffect(() => {
 			const initializeData = async () => {
@@ -215,18 +146,12 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 					setSubject(aiEmail.subject || "");
 					setBody(aiEmail.body || "");
 
-					// Extract variables from both subject and body
-					const allText = `${aiEmail.subject || ""} ${aiEmail.body || ""}`;
-					const extractedVars = extractVariables(allText);
-
-					// Load saved variables from database
-					const savedVariables = await loadVariables();
-
-					// Merge extracted variables with saved values
-					const initialVariables: Record<string, string> = {};
-					extractedVars.forEach((variable) => {
-						initialVariables[variable] = savedVariables[variable] || "";
-					});
+					// Get variables for the template using the modular function
+					const initialVariables = await getVariablesForTemplate(
+						debt.id,
+						aiEmail.subject || "",
+						aiEmail.body || ""
+					);
 
 					setVariables(initialVariables);
 				}
@@ -238,54 +163,24 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 		// Update variables when body changes
 		const handleBodyChange = (newBody: string) => {
 			setBody(newBody);
-			// Extract variables from the new body text
-			const newVariables = extractVariables(newBody);
-			const updatedVariables = { ...variables };
-
-			// Add new variables if they don't exist
-			newVariables.forEach((variable) => {
-				if (!(variable in updatedVariables)) {
-					updatedVariables[variable] = "";
-				}
-			});
-
-			// Remove variables that no longer exist in the text
-			Object.keys(updatedVariables).forEach((variable) => {
-				if (
-					!newVariables.includes(variable) &&
-					!extractVariables(subject).includes(variable)
-				) {
-					delete updatedVariables[variable];
-				}
-			});
-
+			// Update variables using the modular function
+			const updatedVariables = updateVariablesForTextChange(
+				variables,
+				newBody,
+				subject
+			);
 			setVariables(updatedVariables);
 		};
 
 		// Update variables when subject changes
 		const handleSubjectChange = (newSubject: string) => {
 			setSubject(newSubject);
-			// Extract variables from the new subject text
-			const newVariables = extractVariables(newSubject);
-			const updatedVariables = { ...variables };
-
-			// Add new variables if they don't exist
-			newVariables.forEach((variable) => {
-				if (!(variable in updatedVariables)) {
-					updatedVariables[variable] = "";
-				}
-			});
-
-			// Remove variables that no longer exist in the text
-			Object.keys(updatedVariables).forEach((variable) => {
-				if (
-					!newVariables.includes(variable) &&
-					!extractVariables(body).includes(variable)
-				) {
-					delete updatedVariables[variable];
-				}
-			});
-
+			// Update variables using the modular function
+			const updatedVariables = updateVariablesForTextChange(
+				variables,
+				newSubject,
+				body
+			);
 			setVariables(updatedVariables);
 		};
 
@@ -293,11 +188,6 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 		const handleVariableChange = (variableName: string, value: string) => {
 			const newVariables = { ...variables, [variableName]: value };
 			setVariables(newVariables);
-		};
-
-		// Get preview text with variables replaced
-		const getPreviewText = () => {
-			return replaceVariables(`Subject: ${subject}\n\n${body}`, variables);
 		};
 
 		// Get display text for subject (for preview in input)
@@ -338,7 +228,7 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 				}
 
 				// Save variables to database
-				await saveVariables(variables);
+				await saveVariablesToDatabase(debt.id, variables);
 
 				toast.success("Changes saved", {
 					description:
@@ -721,6 +611,11 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 
 						{debt.metadata?.aiEmail && <EditableResponseDialog />}
 					</div>
+
+					{/* Manual Response Dialog - show when requires manual review */}
+					{debt.status === "requires_manual_review" && (
+						<ManualResponseDialog debt={debt} onResponseSent={onUpdate} />
+					)}
 
 					{/* Approve/Reject Buttons */}
 					{showApproveRejectButtons() && (

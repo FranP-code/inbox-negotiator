@@ -506,6 +506,8 @@ serve(async (req) => {
       debt.metadata?.aiEmail,
     );
 
+    console.log({ analysis });
+
     // Store the conversation message
     const { error: messageError } = await supabaseClient
       .from("conversation_messages")
@@ -557,11 +559,11 @@ serve(async (req) => {
         nextAction = analysis.suggestedNextAction;
         break;
       case "request_info":
-        newStatus = "awaiting_response";
+        newStatus = "requires_manual_review";
         nextAction = "escalate_to_user";
         break;
       default:
-        newStatus = "awaiting_response";
+        newStatus = "requires_manual_review";
         nextAction = "escalate_to_user";
     }
 
@@ -669,6 +671,12 @@ serve(async (req) => {
         },
       });
     }
+
+    console.log({
+      shouldAutoRespond,
+      analysisIntent: analysis.intent,
+      analysisConfidence: analysis.confidence,
+    });
 
     // If auto-response is recommended and confidence is high, trigger negotiation
     if (

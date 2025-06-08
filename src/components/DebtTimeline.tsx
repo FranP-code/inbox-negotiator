@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
 	CheckCircle,
 	Clock,
-	AlertCircle,
+	AlertTriangle,
 	XCircle,
 	StopCircle,
 	Send,
@@ -76,6 +76,7 @@ const statusIcons = {
 	sent: Send,
 	awaiting_response: Clock,
 	counter_negotiating: RefreshCw,
+	requires_manual_review: AlertTriangle,
 	accepted: ThumbsUp,
 	rejected: ThumbsDown,
 	settled: CheckCircle,
