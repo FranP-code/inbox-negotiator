@@ -313,11 +313,14 @@ export function Dashboard() {
 								<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 									{debtList.map((debt) => (
 										<div key={debt.id} className="space-y-4">
-											<DebtCard
+											<DebtCard debt={debt} onUpdate={fetchDebts} />
+											<ConversationTimeline
 												debt={debt}
-												onUpdate={fetchDebts}
-												debts={debts}
-												setDebts={setDebts}
+												onDebtUpdate={(debt) => {
+													setDebts(
+														debts.map((d) => (d.id === debt.id ? debt : d))
+													);
+												}}
 											/>
 										</div>
 									))}

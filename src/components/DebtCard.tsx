@@ -54,13 +54,10 @@ import {
 	updateVariablesForTextChange,
 } from "../lib/emailVariables";
 import { ManualResponseDialog } from "./ManualResponseDialog";
-import { ConversationTimeline } from "./ConversationTimeline";
 
 interface DebtCardProps {
 	debt: Debt;
 	onUpdate?: () => void; // Callback to refresh data after updates
-	debts: Debt[];
-	setDebts: (debts: Debt[]) => void;
 }
 
 const statusColors = {
@@ -104,7 +101,7 @@ const statusLabels = {
 	opted_out: "Opted Out",
 };
 
-export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
+export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 	const [isApproving, setIsApproving] = useState(false);
 	const [isRejecting, setIsRejecting] = useState(false);
 	const [userProfile, setUserProfile] = useState<any>(null);
@@ -728,13 +725,6 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 						</AlertDialog>
 					</div>
 				)}
-
-				<ConversationTimeline
-					debt={debt}
-					onDebtUpdate={(debt) => {
-						setDebts(debts.map((d) => (d.id === debt.id ? debt : d)));
-					}}
-				/>
 			</CardContent>
 		</Card>
 	);
