@@ -70,8 +70,33 @@ interface EmailResponseData {
   messageId?: string;
 }
 
+// Retrieve full conversation history for context
+async function getConversationHistory(
+  supabaseClient: any,
+  debtId: string,
+) {
+  try {
+    const { data: messages, error } = await supabaseClient
+      .from("conversation_messages")
+      .select("*")
+      .eq("debt_id", debtId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching conversation history:", error);
+      return [];
+    }
+
+    return messages || [];
+  } catch (error) {
+    console.error("Error in getConversationHistory:", error);
+    return [];
+  }
+}
+
 // AI-powered response analysis
 async function analyzeEmailResponse(
+  supabaseClient: any,
   debtId: string,
   fromEmail: string,
   subject: string,
@@ -91,12 +116,19 @@ async function analyzeEmailResponse(
       bodyLength: body.length,
     });
 
+    // Get full conversation history for better context
+    const conversationHistory = await getConversationHistory(
+      supabaseClient,
+      debtId,
+    );
+
     console.log({
       debtId,
       fromEmail,
       subject,
       body,
       originalNegotiation,
+      conversationHistoryLength: conversationHistory.length,
     });
 
     const system =
@@ -141,19 +173,60 @@ Your entire output MUST be a single, valid JSON object. Do not include any markd
     - "escalate_to_user": The response is hostile, contains legal threats, is complex, or requires a human decision.
     - "mark_settled": The email confirms the debt is fully settled and no further action is needed.
 
-7.  **requiresUserReview**: Set to 'true' if intent is "unclear", sentiment is "negative", confidence is below 0.85, the email contains unusual legal language, or the "suggestedNextAction" is "escalate_to_user". Otherwise, set to 'false'.`;
+7.  **requiresUserReview**: Set to 'true' if intent is "unclear", sentiment is "negative", confidence is below 0.85, the email contains unusual legal language, the "suggestedNextAction" is "escalate_to_user", OR if the message is vague/lacks specific financial terms (e.g., "think of a better offer", "we need more", etc.). Only set to 'false' for clear, specific counter-offers with concrete terms.`;
+
+    // Build conversation history context
+    //     const conversationContext = conversationHistory.length > 0
+    //       ? `--- FULL CONVERSATION HISTORY ---
+    // ${
+    //         conversationHistory.map((msg, index) =>
+    //           `${
+    //             index + 1
+    //           }. ${msg.direction.toUpperCase()} - ${msg.message_type} (${
+    //             new Date(msg.created_at).toLocaleDateString()
+    //           })
+    // Subject: ${msg.subject || "N/A"}
+    // Body: ${msg.body.substring(0, 500)}${msg.body.length > 500 ? "..." : ""}
+    // ${msg.ai_analysis ? `AI Analysis: ${JSON.stringify(msg.ai_analysis)}` : ""}
+    // ---`
+    //         ).join("\n")
+    //       }
+
+    // `
+    //       : "";
+
+    const conversationContext = conversationHistory.length > 0
+      ? `--- FULL CONVERSATION HISTORY ---
+${
+        conversationHistory.map((msg, index) =>
+          `${
+            index + 1
+          }. ${msg.direction.toUpperCase()} - ${msg.message_type} (${
+            new Date(msg.created_at).toLocaleDateString()
+          })
+Subject: ${msg.subject || "N/A"}
+Body: ${msg.body}
+${msg.ai_analysis ? `AI Analysis: ${JSON.stringify(msg.ai_analysis)}` : ""}
+---`
+        ).join("\n")
+      }
+
+`
+      : "";
 
     const prompt =
       `Analyze the following email and extract the financial details and intent, populating the JSON object according to your system instructions.
 
---- EMAIL TO ANALYZE ---
+--- CURRENT EMAIL TO ANALYZE ---
 From: ${fromEmail}
 Subject: ${subject}
 Body: ${body}
 
+${conversationContext}
+
 ${
         originalNegotiation
-          ? `--- ORIGINAL CONTEXT FOR YOUR ANALYSIS ---
+          ? `--- MOST RECENT NEGOTIATION CONTEXT ---
 Our Negotiation Strategy: ${originalNegotiation.strategy}
 Our Proposed Amount: $${originalNegotiation.proposedAmount || "N/A"}
 Our Proposed Terms: ${originalNegotiation.terms || "N/A"}
@@ -499,6 +572,7 @@ serve(async (req) => {
 
     // Analyze the response using AI
     const analysis = await analyzeEmailResponse(
+      supabaseClient,
       debtId,
       fromEmail,
       subject,
@@ -554,8 +628,13 @@ serve(async (req) => {
       case "counter_offer":
         newStatus = "counter_negotiating";
         newNegotiationRound += 1;
+        // More conservative auto-response logic for counter-offers
         shouldAutoRespond = !analysis.requiresUserReview &&
-          analysis.confidence > 0.8;
+          analysis.confidence > 0.9 && // Increased confidence threshold
+          analysis.extractedTerms && // Must have specific terms
+          (analysis.extractedTerms.proposedAmount ||
+            analysis.extractedTerms.paymentTerms) && // Must have concrete financial terms
+          body.length > 20; // Must be more than a vague message
         nextAction = analysis.suggestedNextAction;
         break;
       case "request_info":
@@ -678,10 +757,23 @@ serve(async (req) => {
       analysisConfidence: analysis.confidence,
     });
 
+    // TEMPORARILY DISABLED: Auto-responses need more testing
+    // TODO: Re-enable after thorough testing and user preference settings
+    const AUTO_RESPONSES_ENABLED = true;
+    const conversationHistory = await getConversationHistory(
+      supabaseClient,
+      debtId,
+    );
+    console.log({
+      conversationHistoryLength: conversationHistory.length,
+    });
     // If auto-response is recommended and confidence is high, trigger negotiation
     if (
+      AUTO_RESPONSES_ENABLED &&
       shouldAutoRespond && analysis.confidence > 0.8 &&
-      analysis.intent === "counter_offer"
+      analysis.intent === "counter_offer" &&
+      // the length of the conversation isn't bigger than 2 messages
+      conversationHistory.length <= 2
     ) {
       try {
         const negotiateUrl = `${

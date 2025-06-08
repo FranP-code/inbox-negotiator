@@ -403,13 +403,13 @@ Deno.serve(async (req) => {
         console.error("Error updating debt status:", updateError);
       }
 
-      // Record the sent email in conversation history
+      // Record the sent email in conversation history with processed content
       await supabaseClient.from("conversation_messages").insert({
         debt_id: debtId,
         message_type: "negotiation_sent",
         direction: "outbound",
-        subject: subject,
-        body: body,
+        subject: processedSubject, // Use processed subject with variables replaced
+        body: processedBody, // Use processed body with variables replaced
         from_email: fromEmail,
         to_email: toEmail,
         message_id: emailResult.MessageID,
