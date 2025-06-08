@@ -141,6 +141,171 @@ async function incrementEmailUsage(
 	}
 }
 
+// Check if incoming email is a response to existing negotiation
+async function checkForExistingNegotiation(
+	fromEmail: string,
+	toEmail: string,
+	supabaseAdmin: any,
+) {
+	try {
+		// Look for debts where we've sent emails to this fromEmail and are awaiting response
+		// Include multiple statuses that indicate we're in an active negotiation
+		const { data: debts, error } = await supabaseAdmin
+			.from("debts")
+			.select("*")
+			.in("status", ["sent", "awaiting_response", "counter_negotiating"])
+			.contains("metadata", { fromEmail: fromEmail, toEmail: toEmail })
+			.order("last_message_at", { ascending: false });
+
+		if (error) {
+			console.error("Error checking for existing negotiation:", error);
+			return null;
+		}
+
+		// Return the most recent debt that matches
+		return debts && debts.length > 0 ? debts[0] : null;
+	} catch (error) {
+		console.error("Error in checkForExistingNegotiation:", error);
+		return null;
+	}
+}
+
+// Handle response to existing negotiation
+async function handleNegotiationResponse(
+	debt: any,
+	emailData: any,
+	supabaseAdmin: any,
+) {
+	try {
+		const textBody = emailData.TextBody || emailData.HtmlBody || "";
+		const fromEmail = emailData.FromFull?.Email || emailData.From || "unknown";
+		const subject = emailData.Subject || "";
+		const messageId = emailData.MessageID || `inbound-${Date.now()}`;
+
+		// First, record this message in the conversation
+		await supabaseAdmin.from("conversation_messages").insert({
+			debt_id: debt.id,
+			message_type: "response_received",
+			direction: "inbound",
+			subject: subject,
+			body: textBody,
+			from_email: fromEmail,
+			to_email: emailData.ToFull?.[0]?.Email || emailData.To || "",
+			message_id: messageId,
+		});
+
+		// Update debt conversation tracking
+		await supabaseAdmin
+			.from("debts")
+			.update({
+				conversation_count: debt.conversation_count + 1,
+				last_message_at: new Date().toISOString(),
+				status: "counter_negotiating", // Temporary status while analyzing
+			})
+			.eq("id", debt.id);
+
+		// Call the analyze-response function
+		const supabaseUrl = process.env.SUPABASE_URL ||
+			import.meta.env.PUBLIC_SUPABASE_URL;
+		const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+			import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
+
+		if (supabaseUrl && supabaseServiceKey) {
+			const analyzeUrl = `${supabaseUrl}/functions/v1/analyze-response`;
+
+			try {
+				const response = await fetch(analyzeUrl, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${supabaseServiceKey}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						debtId: debt.id,
+						fromEmail,
+						subject,
+						body: textBody,
+						messageId: messageId,
+					}),
+				});
+
+				if (response.ok) {
+					const result = await response.json();
+					console.log("Response analysis completed:", result);
+
+					// Update the conversation message with AI analysis
+					// !MAYBE NEEDED
+					// await supabaseAdmin
+					// 	.from("conversation_messages")
+					// 	.update({
+					// 		ai_analysis: result.analysis,
+					// 		message_type: result.analysis?.intent === "acceptance"
+					// 			? "acceptance"
+					// 			: result.analysis?.intent === "rejection"
+					// 			? "rejection"
+					// 			: "response_received",
+					// 	})
+					// 	.eq("message_id", messageId);
+
+					return new Response(
+						JSON.stringify({
+							success: true,
+							message: "Negotiation response processed",
+							analysis: result.analysis,
+						}),
+						{
+							status: 200,
+							headers: { "Content-Type": "application/json" },
+						},
+					);
+				} else {
+					console.error(
+						"Error calling analyze-response function:",
+						await response.text(),
+					);
+				}
+			} catch (analyzeError) {
+				console.error("Error calling analyze-response function:", analyzeError);
+			}
+		}
+
+		// Fallback: just log the response and mark for manual review
+		await supabaseAdmin.from("audit_logs").insert({
+			debt_id: debt.id,
+			action: "response_received_fallback",
+			details: {
+				fromEmail,
+				subject,
+				bodyPreview: textBody.substring(0, 200),
+				requiresManualReview: true,
+			},
+		});
+
+		// Update status to require user review
+		await supabaseAdmin
+			.from("debts")
+			.update({ status: "awaiting_response" })
+			.eq("id", debt.id);
+
+		return new Response(
+			JSON.stringify({ success: true, message: "Response logged" }),
+			{
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+	} catch (error) {
+		console.error("Error handling negotiation response:", error);
+		return new Response(
+			JSON.stringify({ error: "Failed to process negotiation response" }),
+			{
+				status: 500,
+				headers: { "Content-Type": "application/json" },
+			},
+		);
+	}
+}
+
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		// Create service role client for webhook operations (bypasses RLS)
@@ -178,6 +343,21 @@ export const POST: APIRoute = async ({ request }) => {
 		if (!userId) {
 			console.warn(`No user found for email: ${toEmail}`);
 			return new Response("No matching user found", { status: 200 });
+		}
+
+		// Check if this is a response to an existing negotiation
+		const existingDebt = await checkForExistingNegotiation(
+			fromEmail,
+			toEmail,
+			supabaseAdmin,
+		);
+
+		console.log({ existingDebt, fromEmail, toEmail });
+		if (existingDebt) {
+			console.log(
+				`Found existing negotiation for debt ${existingDebt.id}, analyzing response...`,
+			);
+			return await handleNegotiationResponse(existingDebt, data, supabaseAdmin);
 		}
 
 		// Increment email processing usage
@@ -248,6 +428,9 @@ export const POST: APIRoute = async ({ request }) => {
 				status: "received",
 				description: debtInfo.description,
 				due_date: debtInfo.dueDate,
+				conversation_count: 1,
+				last_message_at: new Date().toISOString(),
+				negotiation_round: 1,
 				metadata: {
 					isDebtCollection: debtInfo.isDebtCollection,
 					subject: data.Subject,
@@ -257,6 +440,20 @@ export const POST: APIRoute = async ({ request }) => {
 			})
 			.select()
 			.single();
+
+		if (!insertError && insertedDebt) {
+			// Record the initial debt email as the first conversation message
+			await supabaseAdmin.from("conversation_messages").insert({
+				debt_id: insertedDebt.id,
+				message_type: "initial_debt",
+				direction: "inbound",
+				subject: data.Subject,
+				body: textBody,
+				from_email: fromEmail,
+				to_email: toEmail,
+				message_id: data.MessageID || `initial-${Date.now()}`,
+			});
+		}
 
 		if (insertError) {
 			console.error("Error inserting debt:", insertError);

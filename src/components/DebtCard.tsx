@@ -13,6 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import {
 	Dialog,
+	DialogClose,
 	DialogContent,
 	DialogDescription,
 	DialogHeader,
@@ -45,6 +46,7 @@ import {
 } from "lucide-react";
 import { supabase, type Debt, type DebtVariable } from "../lib/supabase";
 import { toast } from "sonner";
+import { formatCurrency } from "../lib/utils";
 
 interface DebtCardProps {
 	debt: Debt;
@@ -59,6 +61,14 @@ const statusColors = {
 	approved:
 		"bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-900/20 dark:text-teal-300 dark:border-teal-800",
 	sent: "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800",
+	awaiting_response:
+		"bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800",
+	counter_negotiating:
+		"bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800",
+	accepted:
+		"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800",
+	rejected:
+		"bg-red-100 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800",
 	settled:
 		"bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-800",
 	failed:
@@ -72,6 +82,10 @@ const statusLabels = {
 	negotiating: "Negotiating",
 	approved: "Approved",
 	sent: "Sent",
+	awaiting_response: "Awaiting Response",
+	counter_negotiating: "Counter Negotiating",
+	accepted: "Accepted",
+	rejected: "Rejected",
 	settled: "Settled",
 	failed: "Failed",
 	opted_out: "Opted Out",
@@ -81,20 +95,19 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 	const [isApproving, setIsApproving] = useState(false);
 	const [isRejecting, setIsRejecting] = useState(false);
 	const [userProfile, setUserProfile] = useState<any>(null);
-	const [hasServerToken, setHasServerToken] = useState(false);
+	const [hasServerToken, setHasServerToken] = useState<boolean | undefined>(
+		undefined
+	);
 
 	const isReadOnly =
 		debt.status === "approved" ||
 		debt.status === "sent" ||
+		debt.status === "awaiting_response" ||
+		debt.status === "accepted" ||
+		debt.status === "rejected" ||
+		debt.status === "settled" ||
 		debt.status === "failed" ||
 		debt.status === "opted_out";
-
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-		}).format(amount);
-	};
 
 	const formatDate = (dateString: string) => {
 		return new Date(dateString).toLocaleDateString("en-US", {
@@ -466,9 +479,11 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 						{/* Action Buttons */}
 						{!isReadOnly && (
 							<div className="flex justify-end gap-2 border-t pt-4">
-								<Button variant="outline" onClick={() => setIsEditing(false)}>
-									Cancel
-								</Button>
+								<DialogClose>
+									<Button variant="outline" onClick={() => setIsEditing(false)}>
+										Cancel
+									</Button>
+								</DialogClose>
 								<Button onClick={handleSave} disabled={isSaving}>
 									{isSaving ? "Saving..." : "Save Changes"}
 								</Button>
@@ -663,8 +678,8 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 
 			<CardContent className="space-y-4">
 				<div className="flex items-center justify-between">
-					<div className="flex items-center gap-2">
-						<DollarSign className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+					<div className="flex items-center gap-0.5">
+						<DollarSign className="h-5 w-5 text-gray-500 dark:text-gray-400 my-auto" />
 						<span className="text-2xl font-bold text-gray-900 dark:text-foreground">
 							{formatCurrency(debt.amount)}
 						</span>
@@ -710,7 +725,7 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 					{/* Approve/Reject Buttons */}
 					{showApproveRejectButtons() && (
 						<div className="space-y-2">
-							{!hasServerToken && (
+							{hasServerToken === false && (
 								<div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
 									<AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
 									<span className="text-sm text-amber-700 dark:text-amber-300 flex-1">
@@ -721,7 +736,7 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 										variant="outline"
 										size="sm"
 										onClick={() => (window.location.href = "/configuration")}
-										className="text-amber-700 border-amber-300 hover:bg-amber-100"
+										className="text-amber-700 dark:text-amber-500 border-amber-300"
 									>
 										<ExternalLink className="h-3 w-3 mr-1" />
 										Settings
@@ -757,7 +772,7 @@ export function DebtCard({ debt, onUpdate }: DebtCardProps) {
 											<AlertDialogCancel>Cancel</AlertDialogCancel>
 											<AlertDialogAction
 												onClick={() => handleApprove()}
-												className="bg-green-600 hover:bg-green-700"
+												className="bg-green-600 hover:bg-green-700 text-white"
 											>
 												Send Email
 											</AlertDialogAction>

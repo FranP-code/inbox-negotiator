@@ -31,11 +31,14 @@ interface DebtRecord {
   amount: number;
   raw_email: string;
   negotiated_plan?: string;
+  projected_savings?: number;
+  conversation_count?: number;
   metadata?: {
     aiEmail?: {
       subject: string;
       body: string;
       strategy: string;
+      confidence?: number;
     };
     toEmail?: string;
     fromEmail?: string;
@@ -243,11 +246,20 @@ Deno.serve(async (req) => {
         body,
       );
 
-      // Update debt status to sent - using authenticated client
+      // Update debt status to sent and preserve negotiating state
+      const { data: currentDebt } = await supabaseClient
+        .from("debts")
+        .select("conversation_count, negotiation_round")
+        .eq("id", debtId)
+        .single();
+
       const { error: updateError } = await supabaseClient
         .from("debts")
         .update({
           status: "sent",
+          conversation_count: (currentDebt?.conversation_count || 0) + 1,
+          last_message_at: new Date().toISOString(),
+          prospected_savings: debt.projected_savings || 0, // Store prospected savings when sent
           metadata: {
             ...debt.metadata,
             emailSent: {
@@ -257,6 +269,14 @@ Deno.serve(async (req) => {
               from: fromEmail,
               subject: subject,
             },
+            prospectedSavings: {
+              amount: debt.projected_savings || 0,
+              percentage: debt.amount > 0
+                ? ((debt.projected_savings || 0) / debt.amount * 100).toFixed(2)
+                : 0,
+              calculatedAt: new Date().toISOString(),
+              strategy: debt.metadata?.aiEmail?.strategy || "unknown",
+            },
           },
         })
         .eq("id", debtId);
@@ -265,20 +285,35 @@ Deno.serve(async (req) => {
         console.error("Error updating debt status:", updateError);
       }
 
-      // Log the action - using authenticated client
-      await supabaseClient
-        .from("audit_logs")
-        .insert({
-          debt_id: debtId,
-          action: "email_sent",
-          details: {
-            messageId: emailResult.MessageID,
-            to: toEmail,
-            from: fromEmail,
-            subject: subject,
-            strategy: debt.metadata.aiEmail.strategy,
-          },
-        });
+      // Record the sent email in conversation history
+      await supabaseClient.from("conversation_messages").insert({
+        debt_id: debtId,
+        message_type: "negotiation_sent",
+        direction: "outbound",
+        subject: subject,
+        body: body,
+        from_email: fromEmail,
+        to_email: toEmail,
+        message_id: emailResult.MessageID,
+        ai_analysis: {
+          strategy: debt.metadata.aiEmail.strategy,
+          confidence: debt.metadata.aiEmail.confidence,
+          projectedSavings: debt.projected_savings,
+        },
+      });
+
+      // Log the email sending
+      await supabaseClient.from("audit_logs").insert({
+        debt_id: debtId,
+        action: "email_sent",
+        details: {
+          to: toEmail,
+          subject: subject,
+          postmarkMessageId: emailResult.MessageID,
+          conversationRound: currentDebt?.negotiation_round || 1,
+          strategy: debt.metadata.aiEmail.strategy,
+        },
+      });
 
       return new Response(
         JSON.stringify({

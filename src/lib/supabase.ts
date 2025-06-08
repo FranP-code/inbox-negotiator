@@ -27,6 +27,10 @@ export type Debt = {
     | "negotiating"
     | "approved"
     | "sent"
+    | "awaiting_response"
+    | "counter_negotiating"
+    | "accepted"
+    | "rejected"
     | "settled"
     | "failed"
     | "opted_out";
@@ -35,6 +39,11 @@ export type Debt = {
   user_id: string;
   description?: string | null;
   due_date?: string | null;
+  conversation_count?: number;
+  last_message_at?: string;
+  negotiation_round?: number;
+  prospected_savings?: number;
+  actual_savings?: number;
   metadata?: Record<string, any> | null;
 };
 
@@ -81,6 +90,27 @@ export type DebtVariable = {
   debt_id: string;
   variable_name: string;
   variable_value: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationMessage = {
+  id: string;
+  debt_id: string;
+  message_type:
+    | "initial_debt"
+    | "negotiation_sent"
+    | "response_received"
+    | "counter_offer"
+    | "acceptance"
+    | "rejection";
+  direction: "inbound" | "outbound";
+  subject?: string;
+  body: string;
+  from_email?: string;
+  to_email?: string;
+  message_id?: string;
+  ai_analysis?: Record<string, any>;
   created_at: string;
   updated_at: string;
 };

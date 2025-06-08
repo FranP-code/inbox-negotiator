@@ -1,16 +1,10 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase, type Debt, type UserProfile } from "../lib/supabase";
 import { Button } from "./ui/button";
 import { DebtCard } from "./DebtCard";
-import { DebtTimeline } from "./DebtTimeline";
+import { ConversationTimeline } from "./ConversationTimeline";
 import { OnboardingDialog } from "./OnboardingDialog";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Separator } from "./ui/separator";
@@ -21,10 +15,9 @@ import {
 	CheckCircle,
 	AlertTriangle,
 	RefreshCw,
-	BarChart3,
-	LogOut,
 	Settings,
 } from "lucide-react";
+import { formatCurrency } from "../lib/utils";
 
 export function Dashboard() {
 	const [debts, setDebts] = useState<Debt[]>([]);
@@ -130,10 +123,13 @@ export function Dashboard() {
 	const calculateStats = () => {
 		const totalDebts = debts.length;
 		const totalAmount = debts.reduce((sum, debt) => sum + debt.amount, 0);
-		const projectedSavings = debts.reduce(
-			(sum, debt) => sum + debt.projected_savings,
-			0
-		);
+		const projectedSavings = debts.reduce((sum, debt) => {
+			// Use actual savings for accepted debts, projected for others
+			if (debt.status === "accepted" && debt.metadata?.actualSavings?.amount) {
+				return sum + debt.metadata.actualSavings.amount;
+			}
+			return sum + debt.projected_savings;
+		}, 0);
 		const settledCount = debts.filter(
 			(debt) => debt.status === "settled"
 		).length;
@@ -157,23 +153,22 @@ export function Dashboard() {
 		window.location.href = "/";
 	};
 
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-		}).format(amount);
-	};
-
 	const groupedDebts = {
 		all: debts,
 		active: debts.filter((debt) =>
-			["received", "negotiating"].includes(debt.status)
+			[
+				"received",
+				"negotiating",
+				"approved",
+				"awaiting_response",
+				"counter_negotiating",
+			].includes(debt.status)
 		),
 		settled: debts.filter((debt) =>
-			["settled", "approved", "sent"].includes(debt.status)
+			["settled", "accepted", "sent"].includes(debt.status)
 		),
 		failed: debts.filter((debt) =>
-			["failed", "opted_out"].includes(debt.status)
+			["failed", "rejected", "opted_out"].includes(debt.status)
 		),
 	};
 
@@ -318,11 +313,14 @@ export function Dashboard() {
 									{debtList.map((debt) => (
 										<div key={debt.id} className="space-y-4">
 											<DebtCard debt={debt} onUpdate={fetchDebts} />
-											<Card className="bg-gray-50 dark:bg-gray-800/50">
-												<CardContent className="p-4">
-													<DebtTimeline debt={debt} />
-												</CardContent>
-											</Card>
+											<ConversationTimeline
+												debt={debt}
+												onDebtUpdate={(debt) => {
+													setDebts(
+														debts.map((d) => (d.id === debt.id ? debt : d))
+													);
+												}}
+											/>
 										</div>
 									))}
 								</div>
