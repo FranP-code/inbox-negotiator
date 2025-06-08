@@ -282,10 +282,10 @@ async function handleNegotiationResponse(
 		});
 
 		// Update status to require user review
-		await supabaseAdmin
-			.from("debts")
-			.update({ status: "requires_manual_review" })
-			.eq("id", debt.id);
+		// await supabaseAdmin
+		// 	.from("debts")
+		// 	.update({ status: "awaiting_response" })
+		// 	.eq("id", debt.id);
 
 		return new Response(
 			JSON.stringify({ success: true, message: "Response logged" }),

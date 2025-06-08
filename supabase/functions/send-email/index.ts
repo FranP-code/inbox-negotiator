@@ -84,15 +84,15 @@ async function sendEmailViaPostmark(
 
 // Extract variables from text in {{ variable }} format
 function extractVariables(text: string): string[] {
-  const variableRegex = /\{\{\s*([^}]+)\s*\}\}/g;
-  const matches: string[] = [];
+  const variableRegex = /\{\{([^}]+)\}\}/g;
+  const variables: string[] = [];
   let match;
+
   while ((match = variableRegex.exec(text)) !== null) {
-    if (!matches.includes(match[1].trim())) {
-      matches.push(match[1].trim());
-    }
+    variables.push(match[1].trim());
   }
-  return matches;
+
+  return [...new Set(variables)]; // Remove duplicates
 }
 
 // Replace variables in text with their values
@@ -100,15 +100,10 @@ function replaceVariables(
   text: string,
   variables: Record<string, string>,
 ): string {
-  let result = text;
-  Object.entries(variables).forEach(([key, value]) => {
-    const regex = new RegExp(
-      `\\{\\{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\}\\}`,
-      "g",
-    );
-    result = result.replace(regex, value);
+  return text.replace(/\{\{([^}]+)\}\}/g, (match, variableName) => {
+    const trimmedName = variableName.trim();
+    return variables[trimmedName] || ""; // Replace with empty string if variable not found
   });
-  return result;
 }
 
 // Load variables from database for a specific debt
@@ -329,17 +324,18 @@ Deno.serve(async (req) => {
 
     // Check if there are unfilled variables
     if (hasUnfilledVariables) {
-      return new Response(
-        JSON.stringify({
-          error: "Email contains unfilled variables",
-          details:
-            "Please fill in all required variables before sending the email.",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      // console.warn("Email contains unfilled variables");
+      // return new Response(
+      //   JSON.stringify({
+      //     error: "Email contains unfilled variables",
+      //     details:
+      //       "Please fill in all required variables before sending the email.",
+      //   }),
+      //   {
+      //     status: 400,
+      //     headers: { ...corsHeaders, "Content-Type": "application/json" },
+      //   },
+      // );
     }
 
     const subject = processedSubject;
