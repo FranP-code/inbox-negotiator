@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { account } from '../lib/appwrite';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Mail, Lock, User } from 'lucide-react';
+import { ID } from 'appwrite';
 
 interface AuthFormProps {
   mode: 'login' | 'signup';
@@ -27,32 +28,28 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        // Create account with Appwrite
+        await account.create(
+          ID.unique(),
           email,
           password,
-          options: {
-            data: {
-              full_name: fullName,
-            }
-          }
-        });
+          fullName
+        );
 
-        if (error) throw error;
-        setMessage('Check your email for the confirmation link!');
+        // Create session after account creation
+        await account.createEmailPasswordSession(email, password);
+        
+        setMessage('Account created successfully!');
         window.location.href = '/dashboard';
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) throw error;
+        // Sign in with Appwrite
+        await account.createEmailPasswordSession(email, password);
         
         // Redirect to dashboard on successful login
         window.location.href = '/dashboard';
       }
     } catch (error: any) {
-      setError(error.message);
+      setError(error.message || 'An error occurred');
     } finally {
       setLoading(false);
     }

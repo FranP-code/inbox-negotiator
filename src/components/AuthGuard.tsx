@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import type { User } from '@supabase/supabase-js';
+import { account } from '../lib/appwrite';
+import type { Models } from 'appwrite';
 import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
@@ -9,47 +9,38 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children, requireAuth = true }: AuthGuardProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    account.get().then((currentUser) => {
+      setUser(currentUser);
       setLoading(false);
       
       // Redirect logic
-      if (requireAuth && !session?.user) {
+      if (requireAuth && !currentUser) {
         // User needs to be authenticated but isn't - redirect to login
         window.location.href = '/login';
-      } else if (!requireAuth && session?.user) {
+      } else if (!requireAuth && currentUser) {
         // User is authenticated but on a public page - redirect to dashboard
         const currentPath = window.location.pathname;
         if (currentPath === '/login' || currentPath === '/signup') {
           window.location.href = '/dashboard';
         }
       }
+    }).catch(() => {
+      // No user session found
+      setUser(null);
+      setLoading(false);
+      
+      if (requireAuth) {
+        window.location.href = '/login';
+      }
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-        
-        // Handle auth state changes
-        if (requireAuth && !session?.user) {
-          window.location.href = '/login';
-        } else if (!requireAuth && session?.user) {
-          const currentPath = window.location.pathname;
-          if (currentPath === '/login' || currentPath === '/signup') {
-            window.location.href = '/dashboard';
-          }
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    // Note: Appwrite doesn't have built-in session listeners like Supabase
+    // You might need to implement session checking through other means or use Appwrite's real-time features
   }, [requireAuth]);
 
   if (loading) {
