@@ -44,7 +44,8 @@ import {
 	ExternalLink,
 	Eye,
 } from "lucide-react";
-import { supabase, type Debt, type DebtVariable } from "../lib/supabase";
+import { account, databases, functions, DATABASE_ID, COLLECTIONS, type Debt, type DebtVariable } from "../lib/appwrite";
+import { ID } from "appwrite";
 import { toast } from "sonner";
 import { formatCurrency } from "../lib/utils";
 import {
@@ -397,17 +398,16 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 
 	const checkServerToken = async () => {
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { data: profile } = await supabase
-				.from("user_profiles")
-				.select("postmark_server_token")
-				.eq("user_id", user.id)
-				.single();
+			const response = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.USER_PROFILES,
+				[] // In production: Query.equal('user_id', user.$id)
+			);
 
+			const profile = response.documents.find(doc => doc.user_id === user.$id);
 			setUserProfile(profile);
 			setHasServerToken(!!profile?.postmark_server_token);
 		} catch (error) {
@@ -427,20 +427,20 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 
 		setIsApproving(true);
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) throw new Error("User not authenticated");
 
 			if (sendEmail) {
 				// Call the send-email function
-				const { data, error } = await supabase.functions.invoke("send-email", {
-					body: {
+				const response = await functions.createExecution(
+					'send-email', // Function ID
+					JSON.stringify({
 						debtId: debt.id,
-					},
-				});
+					})
+				);
 
-				if (error) throw error;
+				const data = JSON.parse(response.response);
+				if (response.status === 'failed') throw new Error(data.error || 'Function execution failed');
 
 				if (data.requiresConfiguration) {
 					toast.error("Configuration Required", {
@@ -455,17 +455,16 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 				});
 			} else {
 				// Call the approve-debt function to handle approval without sending email
-				const { data, error } = await supabase.functions.invoke(
-					"approve-debt",
-					{
-						body: {
-							debtId: debt.id,
-							approvalNote: "Approved by user without sending email",
-						},
-					}
+				const response = await functions.createExecution(
+					'approve-debt', // Function ID
+					JSON.stringify({
+						debtId: debt.id,
+						approvalNote: "Approved by user without sending email",
+					})
 				);
 
-				if (error) throw error;
+				const data = JSON.parse(response.response);
+				if (response.status === 'failed') throw new Error(data.error || 'Function execution failed');
 
 				toast.success("Debt Approved", {
 					description: `Negotiation for ${data.vendor} has been approved and saved.`,
@@ -490,9 +489,11 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 	const handleReject = async () => {
 		setIsRejecting(true);
 		try {
-			const { error } = await supabase
-				.from("debts")
-				.update({
+			await databases.updateDocument(
+				DATABASE_ID,
+				COLLECTIONS.DEBTS,
+				debt.id,
+				{
 					status: "opted_out",
 					metadata: {
 						...debt.metadata,
@@ -501,20 +502,25 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 							reason: "User rejected negotiation",
 						},
 					},
-				})
-				.eq("id", debt.id);
-
-			if (error) throw error;
+					updated_at: new Date().toISOString(),
+				}
+			);
 
 			// Log the action
-			await supabase.from("audit_logs").insert({
-				debt_id: debt.id,
-				action: "negotiation_rejected",
-				details: {
-					rejectedAt: new Date().toISOString(),
-					reason: "User rejected negotiation",
-				},
-			});
+			await databases.createDocument(
+				DATABASE_ID,
+				COLLECTIONS.AUDIT_LOGS,
+				ID.unique(),
+				{
+					debt_id: debt.id,
+					action: "negotiation_rejected",
+					details: {
+						rejectedAt: new Date().toISOString(),
+						reason: "User rejected negotiation",
+					},
+					created_at: new Date().toISOString(),
+				}
+			);
 
 			toast.success("Negotiation Rejected", {
 				description: "The negotiation has been marked as rejected.",

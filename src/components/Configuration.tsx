@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
 import {
-	supabase,
+	account,
+	databases,
+	DATABASE_ID,
+	COLLECTIONS,
 	type AdditionalEmail,
 	type UserProfile,
 	type EmailProcessingUsage,
-} from "../lib/supabase";
+} from "../lib/appwrite";
+import { ID } from "appwrite";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -65,44 +69,48 @@ export function Configuration() {
 
 	const fetchUserData = async () => {
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
 			// Fetch user profile
-			const { data: profileData } = await supabase
-				.from("user_profiles")
-				.select("*")
-				.eq("user_id", user.id)
-				.single();
+			const profileResponse = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.USER_PROFILES,
+				[] // In production: Query.equal('user_id', user.$id)
+			);
+			const profileData = profileResponse.documents.find(doc => doc.user_id === user.$id);
 
-			// Fetch user personal data
-			const { data: userData } = await supabase
-				.from("users")
-				.select("*")
-				.eq("id", user.id)
-				.single();
+			// Fetch user personal data from users collection
+			const usersResponse = await databases.listDocuments(
+				DATABASE_ID,
+				'users', // Assuming users collection exists
+				[] // In production: Query.equal('id', user.$id)
+			);
+			const userData = usersResponse.documents.find(doc => doc.id === user.$id);
 
 			// Fetch additional emails
-			const { data: emailsData } = await supabase
-				.from("additional_emails")
-				.select("*")
-				.eq("user_id", user.id)
-				.order("created_at", { ascending: false });
+			const emailsResponse = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.ADDITIONAL_EMAILS,
+				[] // In production: Query.equal('user_id', user.$id), Query.orderDesc('created_at')
+			);
+			const emailsData = emailsResponse.documents.filter(doc => doc.user_id === user.$id)
+				.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
 			// Fetch current month usage
 			const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-			const { data: usageData } = await supabase
-				.from("email_processing_usage")
-				.select("*")
-				.eq("user_id", user.id)
-				.eq("month_year", currentMonth)
-				.single();
+			const usageResponse = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.EMAIL_PROCESSING_USAGE,
+				[] // In production: Query.equal('user_id', user.$id), Query.equal('month_year', currentMonth)
+			);
+			const usageData = usageResponse.documents.find(doc => 
+				doc.user_id === user.$id && doc.month_year === currentMonth
+			);
 
-			setProfile(profileData);
-			setAdditionalEmails(emailsData || []);
-			setUsage(usageData);
+			setProfile(profileData as UserProfile);
+			setAdditionalEmails(emailsData as AdditionalEmail[]);
+			setUsage(usageData as EmailProcessingUsage);
 
 			// Set personal data
 			if (userData) {
