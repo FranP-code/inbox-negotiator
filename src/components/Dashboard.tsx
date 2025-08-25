@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { account, databases, DATABASE_ID, COLLECTIONS, type Debt, type UserProfile } from "../lib/appwrite";
 import { Button } from "./ui/button";
 import { DebtCard } from "./DebtCard";
-import { ConversationTimeline } from "./ConversationTimeline";
-import { OnboardingDialog } from "./OnboardingDialog";
+// TODO: Migrate these components to Appwrite
+// import { ConversationTimeline } from "./ConversationTimeline";
+// import { OnboardingDialog } from "./OnboardingDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
@@ -327,10 +328,11 @@ export function Dashboard() {
 			</div>
 
 			{/* Onboarding Dialog */}
-			<OnboardingDialog
+			{/* TODO: Migrate OnboardingDialog to Appwrite */}
+			{/* <OnboardingDialog
 				open={showOnboarding}
 				onComplete={handleOnboardingComplete}
-			/>
+			/> */}
 		</div>
 	);
 }

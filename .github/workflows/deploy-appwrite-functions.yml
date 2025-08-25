@@ -1,0 +1,60 @@
+name: Deploy Appwrite Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'appwrite/functions/**'
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+jobs:
+  deploy-functions:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Install Appwrite CLI
+        run: npm install -g appwrite-cli
+        
+      - name: Setup Appwrite CLI
+        run: |
+          appwrite client \
+            --endpoint ${{ secrets.APPWRITE_ENDPOINT }} \
+            --project-id ${{ secrets.APPWRITE_PROJECT_ID }} \
+            --key ${{ secrets.APPWRITE_API_KEY }}
+        
+      - name: Deploy Functions
+        run: ./scripts/deploy-appwrite-functions.sh
+        env:
+          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+          APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          GOOGLE_AI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
+          POSTMARK_SERVER_TOKEN: ${{ secrets.POSTMARK_SERVER_TOKEN }}
+          
+      - name: Create deployment summary
+        run: |
+          echo "## 🚀 Function Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Deployed at: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "### Functions deployed:" >> $GITHUB_STEP_SUMMARY
+          for func in appwrite/functions/*/; do
+            if [ -d "$func" ]; then
+              echo "- $(basename "$func")" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

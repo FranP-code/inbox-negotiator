@@ -54,8 +54,9 @@ import {
 	getVariablesForTemplate,
 	updateVariablesForTextChange,
 } from "../lib/emailVariables";
-import { ManualResponseDialog } from "./ManualResponseDialog";
-import { ConversationTimeline } from "./ConversationTimeline";
+// TODO: Migrate these components to Appwrite
+// import { ManualResponseDialog } from "./ManualResponseDialog";
+// import { ConversationTimeline } from "./ConversationTimeline";
 
 interface DebtCardProps {
 	debt: Debt;
@@ -624,9 +625,10 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 					</div>
 
 					{/* Manual Response Dialog - show when requires manual review */}
-					{debt.status === "requires_manual_review" && (
+					{/* TODO: Migrate ManualResponseDialog to Appwrite */}
+					{/* {debt.status === "requires_manual_review" && (
 						<ManualResponseDialog debt={debt} onResponseSent={onUpdate} />
-					)}
+					)} */}
 
 					{/* Approve/Reject Buttons */}
 					{showApproveRejectButtons() && (
@@ -737,12 +739,13 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 					</div>
 				)}
 
-				<ConversationTimeline
+				{/* TODO: Migrate ConversationTimeline to Appwrite */}
+				{/* <ConversationTimeline
 					debt={debt}
 					onDebtUpdate={(debt) => {
 						setDebts(debts.map((d) => (d.id === debt.id ? debt : d)));
 					}}
-				/>
+				/> */}
 			</CardContent>
 		</Card>
 	);

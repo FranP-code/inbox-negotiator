@@ -37,6 +37,41 @@ PUBLIC_APPWRITE_DATABASE_ID=your_database_id
 APPWRITE_API_KEY=your_api_key
 ```
 
+### Auto-Deploy Functions Setup
+
+#### 1. Install Appwrite CLI
+```bash
+npm install -g appwrite-cli
+```
+
+#### 2. Initialize Appwrite Project
+```bash
+pnpm run setup:appwrite
+# or manually: appwrite init project --project-id your_project_id
+```
+
+#### 3. Deploy Functions Automatically
+```bash
+# Deploy all functions to Appwrite
+pnpm run deploy:functions
+
+# Or run the script directly
+./scripts/deploy-appwrite-functions.sh
+```
+
+#### 4. GitHub Actions Auto-Deploy
+The repository includes a GitHub Actions workflow (`.github/workflows/deploy-appwrite-functions.yml`) that automatically deploys functions when:
+- Changes are pushed to the `main` branch
+- Files in `appwrite/functions/` or `supabase/functions/` are modified
+- Manually triggered via workflow dispatch
+
+**Required GitHub Secrets:**
+- `APPWRITE_PROJECT_ID` - Your Appwrite project ID
+- `APPWRITE_API_KEY` - Your Appwrite API key with Functions write permissions
+- `APPWRITE_ENDPOINT` - Your Appwrite endpoint (default: https://cloud.appwrite.io/v1)
+- `GOOGLE_AI_API_KEY` - For AI-powered functions
+- `POSTMARK_SERVER_TOKEN` - For email functions
+
 ### Database Collections to Create
 1. **debts** - Main debt records
 2. **audit_logs** - Action logging

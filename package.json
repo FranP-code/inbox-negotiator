@@ -8,7 +8,9 @@
     "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "deploy:functions": "./scripts/deploy-appwrite-functions.sh",
+    "setup:appwrite": "appwrite init project"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.19",
@@ -44,7 +46,6 @@
     "@radix-ui/react-toggle": "^1.1.0",
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.2",
-    "appwrite": "^16.0.2",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
     "@vercel/analytics": "^1.5.0",

@@ -1,6 +1,14 @@
 import { Client, Account, Databases, Functions } from "appwrite";
 import { DATABASE_ID, COLLECTIONS } from "./appwrite";
 
+// Export constants for server-side operations
+export { DATABASE_ID, COLLECTIONS };
+
+// Create admin client instances for server-side use
+const adminClient = createAppwriteAdmin();
+export const databases = adminClient.databases;
+export const functions = adminClient.functions;
+
 /**
  * Creates an Appwrite client with admin privileges for server-side operations
  * This client should only be used in trusted contexts like webhooks, API routes, and server-side functions

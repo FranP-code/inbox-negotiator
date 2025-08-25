@@ -9,6 +9,36 @@ An AI-powered system that automatically negotiates debt collections and billing 
 - **Webhook Integration**: Seamlessly processes emails through Postmark webhook integration
 - **Secure Database Operations**: Uses Appwrite's document-level permissions for secure data access
 
+## Development Setup
+
+This project uses **pnpm** as the package manager. Make sure you have pnpm installed:
+
+```bash
+npm install -g pnpm
+```
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd inbox-negotiator
+
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm run dev
+```
+
+### Available Scripts
+
+- `pnpm run dev` - Start development server
+- `pnpm run build` - Build for production
+- `pnpm run preview` - Preview production build
+- `pnpm run deploy:functions` - Deploy Appwrite functions
+- `pnpm run setup:appwrite` - Initialize Appwrite project
+
 ## Environment Setup
 
 Copy `.env.example` to `.env` and configure the following variables:
