@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { account, databases, DATABASE_ID, COLLECTIONS, type Debt, type UserProfile } from "../lib/appwrite";
+import { Query } from "appwrite";
 import { Button } from "./ui/button";
 import { DebtCard } from "./DebtCard";
 // TODO: Migrate these components to Appwrite
@@ -51,11 +52,11 @@ export function Dashboard() {
 			const response = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.USER_PROFILES,
-				[] // Query filters would go here in Appwrite
+				[Query.equal('user_id', user.$id)]
 			);
 
-			// Find profile for current user
-			const profile = response.documents.find(doc => doc.user_id === user.$id);
+			// Get profile for current user
+			const profile = response.documents[0];
 			setUserProfile(profile as UserProfile);
 
 			// Show onboarding if user hasn't completed it
@@ -75,15 +76,11 @@ export function Dashboard() {
 			const response = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.DEBTS,
-				[] // In production, you'd add Query.equal('user_id', user.$id) and Query.orderDesc('created_at')
+				[Query.equal('user_id', user.$id), Query.orderDesc('created_at')]
 			);
 
-			// Filter by user_id and sort by created_at desc (since Appwrite queries might need different syntax)
-			const userDebts = response.documents
-				.filter(doc => doc.user_id === user.$id)
-				.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-			setDebts(userDebts as Debt[]);
+			// Debts are already filtered and sorted by the query
+			setDebts(response.documents as Debt[]);
 		} catch (error) {
 			console.error("Error fetching debts:", error);
 		} finally {
@@ -141,7 +138,7 @@ export function Dashboard() {
 	};
 
 	const handleSignOut = async () => {
-		await supabase.auth.signOut();
+		await account.deleteSession('current');
 		window.location.href = "/";
 	};
 

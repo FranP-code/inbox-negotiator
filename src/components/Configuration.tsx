@@ -8,7 +8,7 @@ import {
 	type UserProfile,
 	type EmailProcessingUsage,
 } from "../lib/appwrite";
-import { ID } from "appwrite";
+import { ID, Query } from "appwrite";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -76,37 +76,34 @@ export function Configuration() {
 			const profileResponse = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.USER_PROFILES,
-				[] // In production: Query.equal('user_id', user.$id)
+				[Query.equal('user_id', user.$id)]
 			);
-			const profileData = profileResponse.documents.find(doc => doc.user_id === user.$id);
+			const profileData = profileResponse.documents[0];
 
 			// Fetch user personal data from users collection
 			const usersResponse = await databases.listDocuments(
 				DATABASE_ID,
 				'users', // Assuming users collection exists
-				[] // In production: Query.equal('id', user.$id)
+				[Query.equal('id', user.$id)]
 			);
-			const userData = usersResponse.documents.find(doc => doc.id === user.$id);
+			const userData = usersResponse.documents[0];
 
 			// Fetch additional emails
 			const emailsResponse = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.ADDITIONAL_EMAILS,
-				[] // In production: Query.equal('user_id', user.$id), Query.orderDesc('created_at')
+				[Query.equal('user_id', user.$id), Query.orderDesc('created_at')]
 			);
-			const emailsData = emailsResponse.documents.filter(doc => doc.user_id === user.$id)
-				.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+			const emailsData = emailsResponse.documents;
 
 			// Fetch current month usage
 			const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 			const usageResponse = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.EMAIL_PROCESSING_USAGE,
-				[] // In production: Query.equal('user_id', user.$id), Query.equal('month_year', currentMonth)
+				[Query.equal('user_id', user.$id), Query.equal('month_year', currentMonth)]
 			);
-			const usageData = usageResponse.documents.find(doc => 
-				doc.user_id === user.$id && doc.month_year === currentMonth
-			);
+			const usageData = usageResponse.documents[0];
 
 			setProfile(profileData as UserProfile);
 			setAdditionalEmails(emailsData as AdditionalEmail[]);
@@ -139,25 +136,46 @@ export function Configuration() {
 	const savePersonalData = async () => {
 		setSavingPersonalData(true);
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { error } = await supabase
-				.from("users")
-				.update({
-					full_name: personalData.full_name || null,
-					address_line_1: personalData.address_line_1 || null,
-					address_line_2: personalData.address_line_2 || null,
-					city: personalData.city || null,
-					state: personalData.state || null,
-					zip_code: personalData.zip_code || null,
-					phone_number: personalData.phone_number || null,
-				})
-				.eq("id", user.id);
+			// First, try to get the existing user document
+			const usersResponse = await databases.listDocuments(
+				DATABASE_ID,
+				'users',
+				[Query.equal('id', user.$id)]
+			);
 
-			if (error) throw error;
+			const updateData = {
+				full_name: personalData.full_name || null,
+				address_line_1: personalData.address_line_1 || null,
+				address_line_2: personalData.address_line_2 || null,
+				city: personalData.city || null,
+				state: personalData.state || null,
+				zip_code: personalData.zip_code || null,
+				phone_number: personalData.phone_number || null,
+			};
+
+			if (usersResponse.documents.length > 0) {
+				// Update existing document
+				await databases.updateDocument(
+					DATABASE_ID,
+					'users',
+					usersResponse.documents[0].$id,
+					updateData
+				);
+			} else {
+				// Create new document if it doesn't exist
+				await databases.createDocument(
+					DATABASE_ID,
+					'users',
+					ID.unique(),
+					{
+						id: user.$id,
+						...updateData
+					}
+				);
+			}
 
 			toast.success("Personal data updated", {
 				description: "Your personal information has been saved successfully.",
@@ -174,19 +192,42 @@ export function Configuration() {
 	const saveServerToken = async () => {
 		setSavingServerToken(true);
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { error } = await supabase
-				.from("user_profiles")
-				.update({
-					postmark_server_token: serverToken || null,
-				})
-				.eq("user_id", user.id);
+			// Get the existing user profile document
+			const profileResponse = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.USER_PROFILES,
+				[Query.equal('user_id', user.$id)]
+			);
 
-			if (error) throw error;
+			if (profileResponse.documents.length > 0) {
+				// Update existing profile
+				await databases.updateDocument(
+					DATABASE_ID,
+					COLLECTIONS.USER_PROFILES,
+					profileResponse.documents[0].$id,
+					{
+						postmark_server_token: serverToken || null,
+					}
+				);
+			} else {
+				// Create new profile if it doesn't exist
+				await databases.createDocument(
+					DATABASE_ID,
+					COLLECTIONS.USER_PROFILES,
+					ID.unique(),
+					{
+						user_id: user.$id,
+						postmark_server_token: serverToken || null,
+						onboarding_completed: false,
+						email_processing_limit: 1000,
+						created_at: new Date().toISOString(),
+						updated_at: new Date().toISOString(),
+					}
+				);
+			}
 
 			// Update local profile state
 			setProfile((prev) =>
@@ -210,23 +251,24 @@ export function Configuration() {
 
 		setAddingEmail(true);
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { data, error } = await supabase
-				.from("additional_emails")
-				.insert({
-					user_id: user.id,
+			const newEmailDoc = await databases.createDocument(
+				DATABASE_ID,
+				COLLECTIONS.ADDITIONAL_EMAILS,
+				ID.unique(),
+				{
+					user_id: user.$id,
 					email_address: newEmail.trim().toLowerCase(),
-				})
-				.select()
-				.single();
+					verified: false,
+					verification_token: null,
+					created_at: new Date().toISOString(),
+					updated_at: new Date().toISOString(),
+				}
+			);
 
-			if (error) throw error;
-
-			setAdditionalEmails([data, ...additionalEmails]);
+			setAdditionalEmails([newEmailDoc as AdditionalEmail, ...additionalEmails]);
 			setNewEmail("");
 			toast.success("Email added successfully", {
 				description: "Additional email has been added to your account.",
@@ -242,15 +284,14 @@ export function Configuration() {
 
 	const removeAdditionalEmail = async (emailId: string) => {
 		try {
-			const { error } = await supabase
-				.from("additional_emails")
-				.delete()
-				.eq("id", emailId);
-
-			if (error) throw error;
+			await databases.deleteDocument(
+				DATABASE_ID,
+				COLLECTIONS.ADDITIONAL_EMAILS,
+				emailId
+			);
 
 			setAdditionalEmails(
-				additionalEmails.filter((email) => email.id !== emailId)
+				additionalEmails.filter((email) => email.$id !== emailId)
 			);
 			toast.success("Email removed", {
 				description: "Additional email has been removed from your account.",
@@ -600,7 +641,7 @@ export function Configuration() {
 								) : (
 									additionalEmails.map((email) => (
 										<div
-											key={email.id}
+											key={email.$id}
 											className="flex items-center justify-between p-3 border rounded-lg"
 										>
 											<div className="flex items-center gap-3">
@@ -632,7 +673,7 @@ export function Configuration() {
 												<Button
 													variant="ghost"
 													size="sm"
-													onClick={() => removeAdditionalEmail(email.id)}
+													onClick={() => removeAdditionalEmail(email.$id)}
 													className="text-destructive hover:text-destructive"
 												>
 													<Trash2 className="h-4 w-4" />

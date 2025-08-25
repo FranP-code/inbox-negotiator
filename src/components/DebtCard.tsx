@@ -45,7 +45,7 @@ import {
 	Eye,
 } from "lucide-react";
 import { account, databases, functions, DATABASE_ID, COLLECTIONS, type Debt, type DebtVariable } from "../lib/appwrite";
-import { ID } from "appwrite";
+import { ID, Query } from "appwrite";
 import { toast } from "sonner";
 import { formatCurrency } from "../lib/utils";
 import {
@@ -219,18 +219,12 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 					},
 				};
 
-				const { error } = await supabase
-					.from("debts")
-					.update({ metadata: updatedMetadata })
-					.eq("id", debt.id);
-
-				if (error) {
-					console.error("Error saving debt metadata:", error);
-					toast.error("Error", {
-						description: "Failed to save email changes. Please try again.",
-					});
-					return;
-				}
+				await databases.updateDocument(
+					DATABASE_ID,
+					COLLECTIONS.DEBTS,
+					debt.$id,
+					{ metadata: updatedMetadata }
+				);
 
 				// Save variables to database
 				await saveVariablesToDatabase(debt.id, variables);
@@ -405,10 +399,10 @@ export function DebtCard({ debt, onUpdate, debts, setDebts }: DebtCardProps) {
 			const response = await databases.listDocuments(
 				DATABASE_ID,
 				COLLECTIONS.USER_PROFILES,
-				[] // In production: Query.equal('user_id', user.$id)
+				[Query.equal('user_id', user.$id)]
 			);
 
-			const profile = response.documents.find(doc => doc.user_id === user.$id);
+			const profile = response.documents[0];
 			setUserProfile(profile);
 			setHasServerToken(!!profile?.postmark_server_token);
 		} catch (error) {

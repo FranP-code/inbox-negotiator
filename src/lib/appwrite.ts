@@ -34,6 +34,7 @@ export type User = {
 };
 
 export type Debt = {
+  $id: string;
   id: string;
   created_at: string;
   updated_at: string;
@@ -67,6 +68,7 @@ export type Debt = {
 };
 
 export type AuditLog = {
+  $id: string;
   id: string;
   created_at: string;
   debt_id: string;
@@ -75,6 +77,7 @@ export type AuditLog = {
 };
 
 export type UserProfile = {
+  $id: string;
   id: string;
   user_id: string;
   created_at: string;
@@ -86,6 +89,7 @@ export type UserProfile = {
 };
 
 export type AdditionalEmail = {
+  $id: string;
   id: string;
   user_id: string;
   email_address: string;
@@ -96,6 +100,7 @@ export type AdditionalEmail = {
 };
 
 export type EmailProcessingUsage = {
+  $id: string;
   id: string;
   user_id: string;
   month_year: string;
@@ -105,6 +110,7 @@ export type EmailProcessingUsage = {
 };
 
 export type DebtVariable = {
+  $id: string;
   id: string;
   debt_id: string;
   variable_name: string;
@@ -114,6 +120,7 @@ export type DebtVariable = {
 };
 
 export type ConversationMessage = {
+  $id: string;
   id: string;
   debt_id: string;
   message_type:

@@ -8,7 +8,7 @@ import { generateObject } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import { DATABASE_ID, COLLECTIONS } from "../../lib/appwrite";
-import { ID } from "appwrite";
+import { ID, Query } from "appwrite";
 
 // Schema for debt information extraction
 const debtSchema = z.object({
@@ -139,12 +139,10 @@ async function incrementEmailUsage(
 		const response = await appwriteAdmin.databases.listDocuments(
 			DATABASE_ID,
 			COLLECTIONS.EMAIL_PROCESSING_USAGE,
-			[] // In production: Query.equal('user_id', userId), Query.equal('month_year', monthYear)
+			[Query.equal('user_id', userId), Query.equal('month_year', monthYear)]
 		);
 		
-		const existingUsage = response.documents.find(doc => 
-			doc.user_id === userId && doc.month_year === monthYear
-		);
+		const existingUsage = response.documents[0];
 		
 		if (existingUsage) {
 			// Update existing usage
@@ -188,22 +186,17 @@ async function checkForExistingNegotiation(
 		const response = await appwriteAdmin.databases.listDocuments(
 			DATABASE_ID,
 			COLLECTIONS.DEBTS,
-			[] // In production: Query.in('status', ['sent', 'awaiting_response', 'counter_negotiating']), Query.orderDesc('last_message_at')
+			[Query.in('status', ['sent', 'awaiting_response', 'counter_negotiating']), Query.orderDesc('last_message_at')]
 		);
 
-		// Filter and sort on the client side for now
+		// Find matching debts based on email metadata
 		const matchingDebts = response.documents.filter(debt => {
 			const metadata = debt.metadata as any;
-			return (
-				debt.status === "sent" || 
-				debt.status === "awaiting_response" || 
-				debt.status === "counter_negotiating"
-			) && 
-			metadata?.fromEmail === fromEmail && 
-			metadata?.toEmail === toEmail;
-		}).sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+			return metadata?.fromEmail === fromEmail && 
+			       metadata?.toEmail === toEmail;
+		});
 
-		// Return the most recent debt that matches
+		// Return the most recent debt that matches (already sorted by orderDesc in query)
 		return matchingDebts.length > 0 ? matchingDebts[0] : null;
 	} catch (error) {
 		console.error("Error in checkForExistingNegotiation:", error);
