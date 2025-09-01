@@ -45,7 +45,26 @@ echo ""
 # Initialize Appwrite project if not already done
 echo -e "${YELLOW}🔧 Setting up Appwrite project...${NC}"
 if [ ! -f ".appwrite/project.json" ]; then
-    appwrite init project --project-id "$APPWRITE_PROJECT_ID"
+    # If running in CI and API key + endpoint are provided, configure client non-interactively
+    if [ -n "$APPWRITE_API_KEY" ] && [ -n "$APPWRITE_ENDPOINT" ]; then
+        echo "Configuring Appwrite CLI in non-interactive mode..."
+        appwrite client --endpoint "$APPWRITE_ENDPOINT" --project-id "$APPWRITE_PROJECT_ID" --key "$APPWRITE_API_KEY" || {
+            echo -e "${RED}❌ Failed to configure Appwrite CLI non-interactively${NC}"
+            exit 1
+        }
+
+        # Create minimal project.json so other commands expecting this file won't fail
+        mkdir -p .appwrite
+        cat > .appwrite/project.json << EOF
+{
+  "projectId": "$APPWRITE_PROJECT_ID",
+  "endpoint": "$APPWRITE_ENDPOINT"
+}
+EOF
+    else
+        # Fallback to interactive init if no API key/endpoint provided
+        appwrite init project --project-id "$APPWRITE_PROJECT_ID"
+    fi
 fi
 
 # Create Appwrite functions directory if it doesn't exist
