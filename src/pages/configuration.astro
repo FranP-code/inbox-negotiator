@@ -1,17 +1,19 @@
 ---
 import "@/styles/globals.css";
 import Layout from "../layouts/Layout.astro";
-import { DisabledProject } from "../components/DisabledProject";
+import { Configuration as ConfigComponent } from "../components/Configuration";
 import { Navbar } from "../components/Navbar";
 import { AuthGuard } from "../components/AuthGuard";
+import { DisabledBanner } from "../components/DisabledBanner";
 import { Toaster } from "../components/ui/sonner";
 ---
 
 <Layout title="Configuration - InboxNegotiator">
 	<Navbar client:load />
+	<DisabledBanner client:load />
 
 	<AuthGuard requireAuth={true} client:load>
-		<DisabledProject client:load />
+		<ConfigComponent client:load />
 	</AuthGuard>
 	<Toaster client:load />
 </Layout>
