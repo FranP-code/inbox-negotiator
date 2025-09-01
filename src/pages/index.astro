@@ -2,10 +2,12 @@
 import "@/styles/globals.css";
 import Layout from "../layouts/Layout.astro";
 import { Navbar } from "../components/Navbar";
+import { DisabledBanner } from "../components/DisabledBanner";
 ---
 
 <Layout title="InboxNegotiator - AI-Powered Debt Resolution">
 	<Navbar client:load />
+	<DisabledBanner client:load />
 
 	<main
 		class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-background dark:to-gray-800"

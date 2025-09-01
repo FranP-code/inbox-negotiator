@@ -4,11 +4,13 @@ import Layout from "../layouts/Layout.astro";
 import { Dashboard } from "../components/Dashboard";
 import { AuthGuard } from "../components/AuthGuard";
 import { Navbar } from "../components/Navbar";
+import { DisabledBanner } from "../components/DisabledBanner";
 import { Toaster } from "../components/ui/sonner";
 ---
 
 <Layout title="Dashboard - InboxNegotiator">
 	<Navbar client:load />
+	<DisabledBanner client:load />
 
 	<AuthGuard requireAuth={true} client:load>
 		<Dashboard client:load />
