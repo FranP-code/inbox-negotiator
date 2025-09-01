@@ -12,7 +12,6 @@ import {
 	RefreshCw,
 } from "lucide-react";
 import type { Debt } from "../lib/supabase";
-import { createClient } from "@supabase/supabase-js";
 
 interface DebtTimelineProps {
 	debt: Debt;

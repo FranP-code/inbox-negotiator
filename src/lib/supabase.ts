@@ -1,6 +1,9 @@
 // Type definitions for Appwrite migration
 // This file no longer contains Supabase client - use appwrite.ts instead
 
+// Dummy export to prevent build errors for disabled components
+export const supabase = null;
+
 export type User = {
   id: string;
   email: string;

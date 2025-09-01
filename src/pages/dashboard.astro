@@ -1,7 +1,7 @@
 ---
 import "@/styles/globals.css";
 import Layout from "../layouts/Layout.astro";
-import { Dashboard } from "../components/Dashboard";
+import { DisabledProject } from "../components/DisabledProject";
 import { AuthGuard } from "../components/AuthGuard";
 import { Navbar } from "../components/Navbar";
 import { Toaster } from "../components/ui/sonner";
@@ -11,7 +11,7 @@ import { Toaster } from "../components/ui/sonner";
 	<Navbar client:load />
 
 	<AuthGuard requireAuth={true} client:load>
-		<Dashboard client:load />
+		<DisabledProject client:load />
 	</AuthGuard>
 	<Toaster client:load />
 </Layout>
