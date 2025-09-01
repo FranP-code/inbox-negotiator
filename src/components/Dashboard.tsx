@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { supabase, type Debt, type UserProfile } from "../lib/supabase";
+import { account, databases, DATABASE_ID, COLLECTIONS, type Debt, type UserProfile } from "../lib/appwrite";
+import { Query } from "appwrite";
 import { Button } from "./ui/button";
 import { DebtCard } from "./DebtCard";
-import { ConversationTimeline } from "./ConversationTimeline";
-import { OnboardingDialog } from "./OnboardingDialog";
+// TODO: Migrate these components to Appwrite
+// import { ConversationTimeline } from "./ConversationTimeline";
+// import { OnboardingDialog } from "./OnboardingDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
@@ -18,6 +20,7 @@ import {
 	Settings,
 } from "lucide-react";
 import { formatCurrency } from "../lib/utils";
+import type { Models } from "appwrite";
 
 export function Dashboard() {
 	const [debts, setDebts] = useState<Debt[]>([]);
@@ -43,18 +46,18 @@ export function Dashboard() {
 
 	const fetchUserProfile = async () => {
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { data: profile } = await supabase
-				.from("user_profiles")
-				.select("*")
-				.eq("user_id", user.id)
-				.single();
+			const response = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.USER_PROFILES,
+				[Query.equal('user_id', user.$id)]
+			);
 
-			setUserProfile(profile);
+			// Get profile for current user
+			const profile = response.documents[0];
+			setUserProfile(profile as UserProfile);
 
 			// Show onboarding if user hasn't completed it
 			if (profile && !profile.onboarding_completed) {
@@ -67,19 +70,17 @@ export function Dashboard() {
 
 	const fetchDebts = async () => {
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const user = await account.get();
 			if (!user) return;
 
-			const { data, error } = await supabase
-				.from("debts")
-				.select("*")
-				.eq("user_id", user.id)
-				.order("created_at", { ascending: false });
+			const response = await databases.listDocuments(
+				DATABASE_ID,
+				COLLECTIONS.DEBTS,
+				[Query.equal('user_id', user.$id), Query.orderDesc('created_at')]
+			);
 
-			if (error) throw error;
-			setDebts(data || []);
+			// Debts are already filtered and sorted by the query
+			setDebts(response.documents as Debt[]);
 		} catch (error) {
 			console.error("Error fetching debts:", error);
 		} finally {
@@ -88,36 +89,24 @@ export function Dashboard() {
 	};
 
 	const setupRealtimeSubscription = () => {
-		const subscription = supabase
-			.channel("debts_changes")
-			.on(
-				"postgres_changes",
-				{
-					event: "*",
-					schema: "public",
-					table: "debts",
-				},
-				(payload) => {
-					if (payload.eventType === "INSERT") {
-						setDebts((prev) => [payload.new as Debt, ...prev]);
-					} else if (payload.eventType === "UPDATE") {
-						setDebts((prev) =>
-							prev.map((debt) =>
-								debt.id === payload.new.id ? (payload.new as Debt) : debt
-							)
-						);
-					} else if (payload.eventType === "DELETE") {
-						setDebts((prev) =>
-							prev.filter((debt) => debt.id !== payload.old.id)
-						);
-					}
-				}
-			)
-			.subscribe();
+		// Appwrite real-time subscription for debts collection
+		// Note: This is a simplified version. In production, you'd need to set up proper channels
+		// and subscribe to document changes for the specific collection
+		
+		// For now, we'll implement a polling mechanism as a fallback
+		// In a full migration, you'd set up Appwrite's real-time listeners
+		const interval = setInterval(() => {
+			fetchDebts();
+		}, 30000); // Poll every 30 seconds
 
 		return () => {
-			subscription.unsubscribe();
+			clearInterval(interval);
 		};
+		
+		// TODO: Implement proper Appwrite real-time subscription
+		// client.subscribe('databases.${DATABASE_ID}.collections.${COLLECTIONS.DEBTS}.documents', response => {
+		//   // Handle real-time updates
+		// });
 	};
 
 	const calculateStats = () => {
@@ -149,7 +138,7 @@ export function Dashboard() {
 	};
 
 	const handleSignOut = async () => {
-		await supabase.auth.signOut();
+		await account.deleteSession('current');
 		window.location.href = "/";
 	};
 
@@ -336,10 +325,11 @@ export function Dashboard() {
 			</div>
 
 			{/* Onboarding Dialog */}
-			<OnboardingDialog
+			{/* TODO: Migrate OnboardingDialog to Appwrite */}
+			{/* <OnboardingDialog
 				open={showOnboarding}
 				onComplete={handleOnboardingComplete}
-			/>
+			/> */}
 		</div>
 	);
 }

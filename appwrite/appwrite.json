@@ -1,0 +1,85 @@
+{
+  "projectId": "$APPWRITE_PROJECT_ID",
+  "projectName": "InboxNegotiator",
+  "functions": [
+    {
+      "name": "negotiate",
+      "functionId": "negotiate",
+      "runtime": "node-18.0",
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "timeout": 15,
+      "enabled": true,
+      "execute": ["any"],
+      "events": [],
+      "schedule": "",
+      "env": {
+        "GOOGLE_AI_API_KEY": "$GOOGLE_AI_API_KEY",
+        "APPWRITE_DATABASE_ID": "$APPWRITE_DATABASE_ID"
+      }
+    },
+    {
+      "name": "approve-debt",
+      "functionId": "approve-debt",
+      "runtime": "node-18.0",
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "timeout": 15,
+      "enabled": true,
+      "execute": ["any"],
+      "events": [],
+      "schedule": "",
+      "env": {
+        "APPWRITE_DATABASE_ID": "$APPWRITE_DATABASE_ID"
+      }
+    },
+    {
+      "name": "send-email",
+      "functionId": "send-email",
+      "runtime": "node-18.0",
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "timeout": 15,
+      "enabled": true,
+      "execute": ["any"],
+      "events": [],
+      "schedule": "",
+      "env": {
+        "POSTMARK_SERVER_TOKEN": "$POSTMARK_SERVER_TOKEN",
+        "APPWRITE_DATABASE_ID": "$APPWRITE_DATABASE_ID"
+      }
+    },
+    {
+      "name": "analyze-response",
+      "functionId": "analyze-response",
+      "runtime": "node-18.0",
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "timeout": 15,
+      "enabled": true,
+      "execute": ["any"],
+      "events": [],
+      "schedule": "",
+      "env": {
+        "GOOGLE_AI_API_KEY": "$GOOGLE_AI_API_KEY",
+        "APPWRITE_DATABASE_ID": "$APPWRITE_DATABASE_ID"
+      }
+    },
+    {
+      "name": "test-extraction",
+      "functionId": "test-extraction",
+      "runtime": "node-18.0",
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "timeout": 15,
+      "enabled": true,
+      "execute": ["any"],
+      "events": [],
+      "schedule": "",
+      "env": {
+        "GOOGLE_AI_API_KEY": "$GOOGLE_AI_API_KEY",
+        "APPWRITE_DATABASE_ID": "$APPWRITE_DATABASE_ID"
+      }
+    }
+  ]
+}

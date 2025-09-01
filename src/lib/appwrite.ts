@@ -1,5 +1,31 @@
-// Type definitions for Appwrite migration
-// This file no longer contains Supabase client - use appwrite.ts instead
+import { Client, Account, Databases, Functions } from "appwrite";
+
+const appwriteEndpoint = import.meta.env.PUBLIC_APPWRITE_ENDPOINT;
+const appwriteProjectId = import.meta.env.PUBLIC_APPWRITE_PROJECT_ID;
+
+if (!appwriteEndpoint || !appwriteProjectId) {
+  throw new Error("Missing Appwrite environment variables");
+}
+
+export const client = new Client()
+  .setEndpoint(appwriteEndpoint)
+  .setProject(appwriteProjectId);
+
+export const account = new Account(client);
+export const databases = new Databases(client);
+export const functions = new Functions(client);
+
+// Database and collection IDs (to be configured in Appwrite)
+export const DATABASE_ID = import.meta.env.PUBLIC_APPWRITE_DATABASE_ID || "inbox-negotiator-db";
+export const COLLECTIONS = {
+  DEBTS: "debts",
+  AUDIT_LOGS: "audit_logs", 
+  USER_PROFILES: "user_profiles",
+  ADDITIONAL_EMAILS: "additional_emails",
+  EMAIL_PROCESSING_USAGE: "email_processing_usage",
+  DEBT_VARIABLES: "debt_variables",
+  CONVERSATION_MESSAGES: "conversation_messages"
+};
 
 export type User = {
   id: string;
@@ -8,6 +34,7 @@ export type User = {
 };
 
 export type Debt = {
+  $id: string;
   id: string;
   created_at: string;
   updated_at: string;
@@ -41,6 +68,7 @@ export type Debt = {
 };
 
 export type AuditLog = {
+  $id: string;
   id: string;
   created_at: string;
   debt_id: string;
@@ -49,6 +77,7 @@ export type AuditLog = {
 };
 
 export type UserProfile = {
+  $id: string;
   id: string;
   user_id: string;
   created_at: string;
@@ -60,6 +89,7 @@ export type UserProfile = {
 };
 
 export type AdditionalEmail = {
+  $id: string;
   id: string;
   user_id: string;
   email_address: string;
@@ -70,6 +100,7 @@ export type AdditionalEmail = {
 };
 
 export type EmailProcessingUsage = {
+  $id: string;
   id: string;
   user_id: string;
   month_year: string;
@@ -79,6 +110,7 @@ export type EmailProcessingUsage = {
 };
 
 export type DebtVariable = {
+  $id: string;
   id: string;
   debt_id: string;
   variable_name: string;
@@ -88,6 +120,7 @@ export type DebtVariable = {
 };
 
 export type ConversationMessage = {
+  $id: string;
   id: string;
   debt_id: string;
   message_type:

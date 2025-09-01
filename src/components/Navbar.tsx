@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
-import type { User } from "@supabase/supabase-js";
+import { account } from "../lib/appwrite";
+import type { Models } from "appwrite";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -14,25 +14,25 @@ import { BarChart3, LogOut, User as UserIcon, Settings } from "lucide-react";
 import { ModeToggle } from "./ModeToggle";
 
 export function Navbar() {
-	const [user, setUser] = useState<User | null>(null);
+	const [user, setUser] = useState<Models.User<Models.Preferences> | null>(null);
 
 	useEffect(() => {
-		supabase.auth.getSession().then(({ data: { session } }) => {
-			setUser(session?.user ?? null);
+		account.get().then((currentUser) => {
+			setUser(currentUser);
+		}).catch(() => {
+			setUser(null);
 		});
-
-		const {
-			data: { subscription },
-		} = supabase.auth.onAuthStateChange((event, session) => {
-			setUser(session?.user ?? null);
-		});
-
-		return () => subscription.unsubscribe();
 	}, []);
 
 	const handleSignOut = async () => {
-		await supabase.auth.signOut();
-		window.location.href = "/";
+		try {
+			await account.deleteSession('current');
+			window.location.href = "/";
+		} catch (error) {
+			console.error('Sign out error:', error);
+			// Force redirect even if sign out fails
+			window.location.href = "/";
+		}
 	};
 
 	const getInitials = (email: string) => {

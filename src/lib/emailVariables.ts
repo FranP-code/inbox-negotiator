@@ -8,7 +8,8 @@
  * - Processing complete email templates
  */
 
-import { supabase } from "./supabase";
+import { databases, DATABASE_ID, COLLECTIONS } from "./appwrite-admin";
+import { ID } from "appwrite";
 
 export interface VariableProcessingResult {
   processedSubject: string;
@@ -68,18 +69,14 @@ export async function loadVariablesFromDatabase(
   debtId: string
 ): Promise<Record<string, string>> {
   try {
-    const { data: dbVariables, error } = await supabase
-      .from("debt_variables")
-      .select("variable_name, variable_value")
-      .eq("debt_id", debtId);
-
-    if (error) {
-      console.error("Error loading variables from database:", error);
-      throw error;
-    }
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.DEBT_VARIABLES,
+      [`debt_id="${debtId}"`]
+    );
 
     const loadedVariables: Record<string, string> = {};
-    dbVariables?.forEach((dbVar) => {
+    response.documents.forEach((dbVar: any) => {
       loadedVariables[dbVar.variable_name] = dbVar.variable_value || "";
     });
 
@@ -100,33 +97,34 @@ export async function saveVariablesToDatabase(
   variables: Record<string, string>
 ): Promise<void> {
   try {
-    // First, delete existing variables for this debt
-    const { error: deleteError } = await supabase
-      .from("debt_variables")
-      .delete()
-      .eq("debt_id", debtId);
+    // First, get existing variables for this debt
+    const existingVariables = await databases.listDocuments(
+      DATABASE_ID,
+      COLLECTIONS.DEBT_VARIABLES,
+      [`debt_id="${debtId}"`]
+    );
 
-    if (deleteError) {
-      console.error("Error deleting existing variables:", deleteError);
-      throw deleteError;
+    // Delete existing variables
+    for (const variable of existingVariables.documents) {
+      await databases.deleteDocument(
+        DATABASE_ID,
+        COLLECTIONS.DEBT_VARIABLES,
+        variable.$id
+      );
     }
 
-    // Then insert new variables
-    const variableRecords = Object.entries(variables).map(([name, value]) => ({
-      debt_id: debtId,
-      variable_name: name,
-      variable_value: value,
-    }));
-
-    if (variableRecords.length > 0) {
-      const { error: insertError } = await supabase
-        .from("debt_variables")
-        .insert(variableRecords);
-
-      if (insertError) {
-        console.error("Error inserting variables:", insertError);
-        throw insertError;
-      }
+    // Insert new variables
+    for (const [name, value] of Object.entries(variables)) {
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTIONS.DEBT_VARIABLES,
+        ID.unique(),
+        {
+          debt_id: debtId,
+          variable_name: name,
+          variable_value: value,
+        }
+      );
     }
   } catch (error) {
     console.error("Error in saveVariablesToDatabase:", error);
